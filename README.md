@@ -58,5 +58,7 @@ After deployment, add the deployed URL to Supabase Auth redirect URLs.
 Current alpha deployment resources:
 
 - Cloudflare Pages project: `narikiri-trpg-room`
+- Production URL: [https://narikiri-trpg-room.pages.dev](https://narikiri-trpg-room.pages.dev)
+- GitHub repository: [sekitui-man/narikiri-trpg-room](https://github.com/sekitui-man/narikiri-trpg-room)
 - Supabase project: `narikiri-trpg-room` / `ucksbyrytxsowuowooco`
 - Access ledger: [Narikiri TRPG Room Access List](https://docs.google.com/spreadsheets/d/1yy_lUqoI19WnkzOqJ-Sk7rkCHWGc7jjpokb5umglto0/edit)

@@ -12,3 +12,5 @@
 - Paused old Supabase project `rp-room` after hitting the active free-project limit.
 - Created replacement Supabase project `narikiri-trpg-room` in `ap-northeast-1` and applied schema migrations.
 - Created replacement Google Sheet `Narikiri TRPG Room Access List` for invite/access metadata.
+- Created GitHub repository `sekitui-man/narikiri-trpg-room`, pushed initial commit, and deployed Cloudflare Pages production at `https://narikiri-trpg-room.pages.dev`.
+- Verified deployed site returns HTTP 200 and serves `Narikiri TRPG Room`.
