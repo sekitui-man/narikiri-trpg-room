@@ -24,6 +24,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Deployment target is Cloudflare Pages.
 - Supabase backend should be a new project, not colocated with existing projects.
 - Drive "login information" means access ledger fields such as email, display name, role, status, and notes. Passwords must not be stored in Drive.
+- Magic Link redirects should use `VITE_AUTH_REDIRECT_URL` when configured; otherwise they fall back to the current browser origin for local review.
 
 ## Success Criteria
 - `npm run build` succeeds.

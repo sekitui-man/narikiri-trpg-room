@@ -3,6 +3,7 @@ create schema if not exists app_private;
 create table if not exists public.allowed_members (
   email text primary key,
   display_name text not null,
+  role text not null default 'player' check (role in ('owner', 'gm', 'player', 'viewer')),
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   check (email = lower(email))
@@ -154,7 +155,17 @@ create policy "Allowed users can create rooms"
 on public.rooms
 for insert
 to authenticated
-with check (app_private.is_allowed_member() and created_by = (select auth.uid()));
+with check (
+  app_private.is_allowed_member()
+  and created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.allowed_members allowed
+    where allowed.email = lower(((select auth.jwt()) ->> 'email'))
+      and allowed.is_active = true
+      and allowed.role in ('owner', 'gm')
+  )
+);
 
 create policy "Room owners and GMs can update rooms"
 on public.rooms
@@ -176,16 +187,28 @@ for select
 to authenticated
 using (app_private.is_room_member(room_id));
 
-create policy "Room owners and GMs can insert membership"
+create policy "Allowed membership inserts"
 on public.room_members
 for insert
 to authenticated
 with check (
-  exists (
-    select 1 from public.room_members member
-    where member.room_id = room_members.room_id
-      and member.user_id = (select auth.uid())
-      and member.role in ('owner', 'gm')
+  (
+    exists (
+      select 1 from public.room_members member
+      where member.room_id = room_members.room_id
+        and member.user_id = (select auth.uid())
+        and member.role in ('owner', 'gm')
+    )
+  )
+  or (
+    user_id = (select auth.uid())
+    and role in ('owner', 'gm')
+    and exists (
+      select 1
+      from public.rooms room
+      where room.id = room_members.room_id
+        and room.created_by = (select auth.uid())
+    )
   )
 );
 

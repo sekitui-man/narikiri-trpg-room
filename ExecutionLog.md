@@ -14,3 +14,8 @@
 - Created replacement Google Sheet `Narikiri TRPG Room Access List` for invite/access metadata.
 - Created GitHub repository `sekitui-man/narikiri-trpg-room`, pushed initial commit, and deployed Cloudflare Pages production at `https://narikiri-trpg-room.pages.dev`.
 - Verified deployed site returns HTTP 200 and serves `Narikiri TRPG Room`.
+- Issued developer allowlist account for `shinohara12_sekitui@icloud.com` with `owner` role. Login is via Supabase Magic Link; no password is stored.
+- Replaced a temporary SECURITY DEFINER bootstrap RPC with RLS-only owner/gm bootstrap policies after Supabase security advisor flagged the RPC.
+- Vulnerability checks: `npm audit --audit-level=moderate` found no vulnerabilities, Supabase security advisor has no lints, and secret scan found no committed service-role/secret keys.
+- Fixed Magic Link redirect handling so `VITE_AUTH_REDIRECT_URL` can pin login links to the Cloudflare Pages URL instead of localhost.
+- Set Cloudflare Pages production and preview environment variable `VITE_AUTH_REDIRECT_URL=https://narikiri-trpg-room.pages.dev`.

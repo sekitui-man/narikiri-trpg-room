@@ -16,6 +16,14 @@ import { demoCharacters, demoMessages, demoScenes } from './demoData';
 import type { Character, RpMessage, Scene } from './types';
 
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
+type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
+type AllowedMember = {
+  email: string;
+  display_name: string;
+  role: AccessRole;
+};
+
+const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
 
 export function App() {
   const [authState, setAuthState] = useState<AuthState>(isSupabaseConfigured ? 'checking' : 'demo');
@@ -41,9 +49,10 @@ export function App() {
         return;
       }
       setCurrentUserId(data.user.id);
-      const allowed = await checkAllowed(data.user.email);
-      if (allowed) await loadRoomData(data.user.id, data.user.email);
-      setAuthState(allowed ? 'allowed' : 'blocked');
+      const allowedMember = await checkAllowed(data.user.email);
+      if (allowedMember) await ensureMemberBootstrap(data.user.id, data.user.email, allowedMember);
+      if (allowedMember) await loadRoomData(data.user.id, data.user.email);
+      setAuthState(allowedMember ? 'allowed' : 'blocked');
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -53,9 +62,10 @@ export function App() {
         return;
       }
       setCurrentUserId(session.user.id);
-      checkAllowed(session.user.email).then(async (allowed) => {
-        if (allowed) await loadRoomData(session.user.id, session.user.email!);
-        setAuthState(allowed ? 'allowed' : 'blocked');
+      checkAllowed(session.user.email).then(async (allowedMember) => {
+        if (allowedMember) await ensureMemberBootstrap(session.user.id, session.user.email!, allowedMember);
+        if (allowedMember) await loadRoomData(session.user.id, session.user.email!);
+        setAuthState(allowedMember ? 'allowed' : 'blocked');
       });
     });
 
@@ -78,7 +88,7 @@ export function App() {
     if (!supabase) return false;
     const { data, error } = await supabase
       .from('allowed_members')
-      .select('email, display_name')
+      .select('email, display_name, role')
       .eq('email', userEmail.toLowerCase())
       .eq('is_active', true)
       .maybeSingle();
@@ -87,7 +97,85 @@ export function App() {
       setAuthMessage(error.message);
       return false;
     }
-    return Boolean(data);
+    return data as AllowedMember | null;
+  }
+
+  async function ensureMemberBootstrap(userId: string, userEmail: string, allowedMember: AllowedMember) {
+    if (!supabase) return;
+
+    await supabase.from('profiles').upsert({
+      id: userId,
+      email: userEmail.toLowerCase(),
+      display_name: allowedMember.display_name,
+      updated_at: new Date().toISOString(),
+    });
+
+    const { data: rooms, error: roomsError } = await supabase
+      .from('rooms')
+      .select('id')
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    if (roomsError || rooms?.length) {
+      if (roomsError) setAuthMessage(roomsError.message);
+      return;
+    }
+
+    if (!['owner', 'gm'].includes(allowedMember.role)) return;
+
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .insert({
+        title: '夜明け前の酒場',
+        summary: '雨音が屋根を打つ。閉店後の酒場に、まだ灯りがひとつ残っている。',
+        created_by: userId,
+      })
+      .select('id')
+      .single();
+
+    if (roomError || !room) {
+      setAuthMessage(roomError?.message ?? '初期ルームを作成できませんでした。');
+      return;
+    }
+
+    const bootstrapRole = allowedMember.role === 'gm' ? 'gm' : 'owner';
+    const { error: memberError } = await supabase.from('room_members').insert({
+      room_id: room.id,
+      user_id: userId,
+      role: bootstrapRole,
+    });
+
+    if (memberError) {
+      setAuthMessage(memberError.message);
+      return;
+    }
+
+    await Promise.all([
+      supabase.from('scenes').insert({
+        room_id: room.id,
+        title: '夜明け前の酒場',
+        summary: '雨音が屋根を打つ。閉店後の酒場に、まだ灯りがひとつ残っている。',
+        status: 'active',
+      }),
+      supabase.from('characters').insert([
+        {
+          room_id: room.id,
+          owner_id: userId,
+          name: '蓮',
+          archetype: '情報屋',
+          color: '#000000',
+          memo: '表向きは酒場の常連。相手の嘘に気づいても、すぐには指摘しない。',
+        },
+        {
+          room_id: room.id,
+          owner_id: null,
+          name: '語り手',
+          archetype: '進行',
+          color: '#666666',
+          memo: '場面描写、NPC、判定結果を担当する。',
+        },
+      ]),
+    ]);
   }
 
   async function loadRoomData(userId: string, userEmail: string) {
@@ -200,7 +288,7 @@ export function App() {
     setAuthMessage('');
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: authRedirectUrl || window.location.origin },
     });
     setAuthMessage(error ? error.message : 'ログインリンクを送信しました。');
   }
