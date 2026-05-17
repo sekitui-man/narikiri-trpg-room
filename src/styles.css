@@ -35,6 +35,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .center-screen,
 .auth-shell {
   min-height: 100vh;
@@ -148,6 +153,11 @@ select:focus {
 .button-secondary:hover,
 .icon-button:hover {
   background: var(--neutral);
+}
+
+.button-secondary:disabled:hover,
+.icon-button:disabled:hover {
+  background: transparent;
 }
 
 .error {

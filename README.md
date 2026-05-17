@@ -68,6 +68,8 @@ VITE_AUTH_REDIRECT_URL
 
 Set `VITE_AUTH_REDIRECT_URL` to the canonical deployed URL, for example `https://narikiri-trpg-room.pages.dev`, so Magic Links generated from a local session do not redirect back to localhost. After deployment, add the deployed URL to Supabase Auth redirect URLs.
 
+Supabase's built-in Auth email sender is only suitable for light testing and can return `email rate limit exceeded`. For production or repeated testing, configure a custom SMTP provider in Supabase Auth settings and avoid repeatedly requesting Magic Links for the same address.
+
 Current alpha deployment resources:
 
 - Cloudflare Pages project: `narikiri-trpg-room`

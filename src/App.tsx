@@ -24,6 +24,7 @@ type AllowedMember = {
 };
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
+const magicLinkCooldownSeconds = 60;
 
 export function App() {
   const [authState, setAuthState] = useState<AuthState>(isSupabaseConfigured ? 'checking' : 'demo');
@@ -31,6 +32,8 @@ export function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('');
+  const [isMagicLinkSending, setIsMagicLinkSending] = useState(false);
+  const [magicLinkCooldown, setMagicLinkCooldown] = useState(0);
   const [characters, setCharacters] = useState<Character[]>(demoCharacters);
   const [scenes, setScenes] = useState<Scene[]>(demoScenes);
   const [messages, setMessages] = useState<RpMessage[]>(demoMessages);
@@ -71,6 +74,16 @@ export function App() {
 
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (magicLinkCooldown <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setMagicLinkCooldown((remaining) => Math.max(remaining - 1, 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [magicLinkCooldown]);
 
   const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
   const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
@@ -283,14 +296,25 @@ export function App() {
   }
 
   async function handleMagicLink() {
-    if (!supabase || !email) return;
+    if (!supabase || !email || isMagicLinkSending || magicLinkCooldown > 0) return;
 
     setAuthMessage('');
+    setIsMagicLinkSending(true);
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: authRedirectUrl || window.location.origin },
     });
-    setAuthMessage(error ? error.message : 'ログインリンクを送信しました。');
+    setIsMagicLinkSending(false);
+    setMagicLinkCooldown(magicLinkCooldownSeconds);
+    if (error) {
+      setAuthMessage(
+        error.message.toLowerCase().includes('rate limit')
+          ? 'メール送信回数の上限に達しました。少し時間をおいてから、同じボタンを1回だけ押してください。'
+          : error.message,
+      );
+      return;
+    }
+    setAuthMessage('ログインリンクを送信しました。届いた最新のメールだけを開いてください。');
   }
 
   async function handleSignOut() {
@@ -395,9 +419,18 @@ export function App() {
               <DoorOpen size={17} />
               ログイン
             </button>
-            <button className="button-secondary" type="button" onClick={handleMagicLink}>
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={handleMagicLink}
+              disabled={isMagicLinkSending || magicLinkCooldown > 0}
+            >
               <Mail size={17} />
-              マジックリンクを送る
+              {magicLinkCooldown > 0
+                ? `${magicLinkCooldown}秒後に再送`
+                : isMagicLinkSending
+                  ? '送信中'
+                  : 'マジックリンクを送る'}
             </button>
           </form>
           {authState === 'blocked' && <p className="error">このメールアドレスは許可リストにありません。</p>}
