@@ -20,3 +20,4 @@
 - Fixed Magic Link redirect handling so `VITE_AUTH_REDIRECT_URL` can pin login links to the Cloudflare Pages URL instead of localhost.
 - Set Cloudflare Pages production and preview environment variable `VITE_AUTH_REDIRECT_URL=https://narikiri-trpg-room.pages.dev`.
 - Added Magic Link send cooldown UI and documented Supabase built-in Auth email rate limit behavior.
+- Updated UI styling to Bluepoch Monochrome Editorial, added Discord OAuth login entry point, and added optional external Supabase character source configuration.

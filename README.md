@@ -44,6 +44,7 @@ on conflict (email) do update
 - Their email must exist in `public.allowed_members` with `is_active = true`.
 - They must also exist in `public.room_members` for a room to read or post inside that room.
 - An `owner` or `gm` allowlist role can bootstrap the first room on first login.
+- Discord OAuth users are still restricted by the same email allowlist. The Discord account must expose an email address that exists in `public.allowed_members`.
 
 The frontend only uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Do not put a Supabase service-role key in `.env` for this app.
 
@@ -64,11 +65,22 @@ Environment variables:
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 VITE_AUTH_REDIRECT_URL
+VITE_CHARACTER_SUPABASE_URL
+VITE_CHARACTER_SUPABASE_ANON_KEY
+VITE_CHARACTER_SOURCE_TABLE
 ```
 
 Set `VITE_AUTH_REDIRECT_URL` to the canonical deployed URL, for example `https://narikiri-trpg-room.pages.dev`, so Magic Links generated from a local session do not redirect back to localhost. After deployment, add the deployed URL to Supabase Auth redirect URLs.
 
 Supabase's built-in Auth email sender is only suitable for light testing and can return `email rate limit exceeded`. For production or repeated testing, configure a custom SMTP provider in Supabase Auth settings and avoid repeatedly requesting Magic Links for the same address.
+
+To enable Discord login, configure the Discord provider in Supabase Auth. The Discord application redirect/callback URL is:
+
+```text
+https://ucksbyrytxsowuowooco.supabase.co/auth/v1/callback
+```
+
+The optional character source variables point at another Supabase project. For the existing `trpg-discord-bot` project, `VITE_CHARACTER_SUPABASE_URL` is `https://nqwqzpfimsweerpdsiee.supabase.co`. `VITE_CHARACTER_SOURCE_TABLE` defaults to `scenario_plans` and expects a `participants` JSON column. If the source project does not expose readable rows to its publishable/anon key, the app falls back to room-local characters.
 
 Current alpha deployment resources:
 

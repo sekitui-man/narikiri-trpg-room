@@ -5,19 +5,20 @@
 - Use Supabase for authentication and data persistence.
 - Only explicitly allowed people may access the app.
 - Keep the first implementation minimal, deterministic, and locally runnable.
-- Follow the Applibot Light visual system supplied by the user:
-  - White background and surface.
-  - Black primary UI.
-  - Blue `#0057FF` accent.
-  - Helvetica with Japanese-capable fallbacks.
-  - Flat surfaces, small radii, no heavy shadows, no gradients, no glass effects.
+- Follow the Bluepoch Monochrome Editorial visual system supplied by the user:
+  - White surface with near-black `#090909` typography.
+  - Restrained blue `#1D4ED8` accent.
+  - Arial with Japanese-capable fallbacks.
+  - Airy editorial spacing, thin borders, small radii, no heavy shadows, no gradients, no glass effects.
 
 ## Product Scope
 - Email magic-link/password authentication through Supabase Auth.
+- Discord OAuth authentication through Supabase Auth.
 - Access gated by an `allowed_members` table.
 - Text-based RP timeline.
 - Character selection and IC/OOC posting mode.
 - Scene memo and character notes panel.
+- Optional character import from a configured external Supabase character source.
 - Supabase SQL schema with RLS policies for invited room members.
 
 ## Out Of Scope For Alpha

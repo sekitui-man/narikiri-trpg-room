@@ -1,17 +1,19 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import {
   BookOpen,
   DoorOpen,
   Lock,
   LogOut,
   Mail,
+  MessageCircle,
   MessageSquareText,
   PanelRight,
   Send,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
-import { isSupabaseConfigured, supabase } from './supabase';
+import { characterSourceSupabase, isSupabaseConfigured, supabase } from './supabase';
 import { demoCharacters, demoMessages, demoScenes } from './demoData';
 import type { Character, RpMessage, Scene } from './types';
 
@@ -22,9 +24,17 @@ type AllowedMember = {
   display_name: string;
   role: AccessRole;
 };
+type ExternalCharacterRow = {
+  id?: string;
+  scenario_name?: string | null;
+  status?: string | null;
+  participants?: unknown;
+};
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
+const characterSourceTable = (import.meta.env.VITE_CHARACTER_SOURCE_TABLE as string | undefined)?.trim() || 'scenario_plans';
 const magicLinkCooldownSeconds = 60;
+const externalCharacterColors = ['#090909', '#1D4ED8', '#6B7280', '#BFC3C9'];
 
 export function App() {
   const [authState, setAuthState] = useState<AuthState>(isSupabaseConfigured ? 'checking' : 'demo');
@@ -47,29 +57,11 @@ export function App() {
     if (!supabase) return;
 
     supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user?.email) {
-        setAuthState('signed-out');
-        return;
-      }
-      setCurrentUserId(data.user.id);
-      const allowedMember = await checkAllowed(data.user.email);
-      if (allowedMember) await ensureMemberBootstrap(data.user.id, data.user.email, allowedMember);
-      if (allowedMember) await loadRoomData(data.user.id, data.user.email);
-      setAuthState(allowedMember ? 'allowed' : 'blocked');
+      await handleAuthenticatedUser(data.user);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user?.email) {
-        setAuthState('signed-out');
-        setCurrentUserId(null);
-        return;
-      }
-      setCurrentUserId(session.user.id);
-      checkAllowed(session.user.email).then(async (allowedMember) => {
-        if (allowedMember) await ensureMemberBootstrap(session.user.id, session.user.email!, allowedMember);
-        if (allowedMember) await loadRoomData(session.user.id, session.user.email!);
-        setAuthState(allowedMember ? 'allowed' : 'blocked');
-      });
+      void handleAuthenticatedUser(session?.user ?? null);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -96,6 +88,26 @@ export function App() {
       })),
     [characters, messages],
   );
+
+  async function handleAuthenticatedUser(user: User | null) {
+    if (!user) {
+      setAuthState('signed-out');
+      setCurrentUserId(null);
+      return;
+    }
+
+    if (!user.email) {
+      setAuthMessage('Discordアカウントのメールアドレスを取得できませんでした。Discord側でメール認証を確認してください。');
+      setAuthState('blocked');
+      return;
+    }
+
+    setCurrentUserId(user.id);
+    const allowedMember = await checkAllowed(user.email);
+    if (allowedMember) await ensureMemberBootstrap(user.id, user.email, allowedMember);
+    if (allowedMember) await loadRoomData(user.id, user.email);
+    setAuthState(allowedMember ? 'allowed' : 'blocked');
+  }
 
   async function checkAllowed(userEmail: string) {
     if (!supabase) return false;
@@ -251,7 +263,11 @@ export function App() {
       setSelectedSceneId(remoteScenes[0].id);
     }
 
-    if (remoteCharacters?.length) {
+    const externalCharacters = await loadExternalCharacters();
+    if (externalCharacters.length) {
+      setCharacters(externalCharacters);
+      setSelectedCharacterId(externalCharacters[0].id);
+    } else if (remoteCharacters?.length) {
       const mappedCharacters = remoteCharacters.map((character) => ({
         id: character.id,
         name: character.name,
@@ -315,6 +331,53 @@ export function App() {
       return;
     }
     setAuthMessage('ログインリンクを送信しました。届いた最新のメールだけを開いてください。');
+  }
+
+  async function handleDiscordSignIn() {
+    if (!supabase) return;
+
+    setAuthMessage('');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: authRedirectUrl || window.location.origin,
+        scopes: 'identify email',
+      },
+    });
+    if (error) setAuthMessage(error.message);
+  }
+
+  async function loadExternalCharacters(): Promise<Character[]> {
+    if (!characterSourceSupabase) return [];
+
+    const { data, error } = await characterSourceSupabase
+      .from(characterSourceTable)
+      .select('id, scenario_name, status, participants')
+      .order('updated_at', { ascending: false })
+      .limit(8);
+
+    if (error || !data?.length) return [];
+
+    return (data as ExternalCharacterRow[]).flatMap((row, rowIndex) => {
+      const participants = Array.isArray(row.participants) ? row.participants : [];
+      return participants.map((participant, participantIndex) => {
+        const source =
+          typeof participant === 'object' && participant !== null ? (participant as Record<string, unknown>) : {};
+        const fallbackName = typeof participant === 'string' ? participant : `Participant ${participantIndex + 1}`;
+        const name = String(
+          source.character_name ?? source.characterName ?? source.name ?? source.display_name ?? fallbackName,
+        );
+
+        return {
+          id: `external-${row.id ?? rowIndex}-${participantIndex}`,
+          name,
+          player: String(source.player ?? source.user ?? source.display_name ?? 'External DB'),
+          archetype: String(source.role ?? source.type ?? row.status ?? 'Participant'),
+          color: String(source.color ?? externalCharacterColors[participantIndex % externalCharacterColors.length]),
+          memo: String(source.memo ?? row.scenario_name ?? '外部TRPG DBから取得したキャラクターです。'),
+        };
+      });
+    });
   }
 
   async function handleSignOut() {
@@ -399,12 +462,18 @@ export function App() {
           </div>
           <h1 id="auth-title">招待されたメンバーだけが入れるRPスペース</h1>
           <p>
-            Supabase Authでログインし、許可リストに登録されたメールアドレスだけがルームへ入れます。
+            Supabase Authでログインし、許可リストに登録されたメールアドレスだけがルームへ入れます。Discordログインも同じ許可リストで制限します。
           </p>
           <form className="auth-form" onSubmit={handleSignIn}>
             <label>
               メールアドレス
-              <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
+              <input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+                autoComplete="username"
+                required
+              />
             </label>
             <label>
               パスワード
@@ -418,6 +487,10 @@ export function App() {
             <button className="button-primary" type="submit">
               <DoorOpen size={17} />
               ログイン
+            </button>
+            <button className="button-primary discord-button" type="button" onClick={handleDiscordSignIn}>
+              <MessageCircle size={17} />
+              Discordでログイン
             </button>
             <button
               className="button-secondary"

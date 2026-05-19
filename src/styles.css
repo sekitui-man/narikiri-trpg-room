@@ -1,16 +1,19 @@
 :root {
-  font-family: Helvetica, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
-  color: #000000;
+  font-family: Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  color: #090909;
   background: #ffffff;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --primary: #000000;
-  --secondary: #666666;
-  --accent: #0057ff;
-  --neutral: #e5e7eb;
+  --primary: #090909;
+  --secondary: #6b7280;
+  --tertiary: #1d4ed8;
+  --neutral: #f3f4f6;
   --surface: #ffffff;
-  --error: #d92d20;
+  --on-surface: #090909;
+  --error: #dc2626;
+  --border: #e5e7eb;
+  --muted: #bfc3c9;
 }
 
 * {
@@ -45,8 +48,8 @@ button:disabled {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
-  background: #ffffff;
+  padding: 32px;
+  background: var(--surface);
 }
 
 .mark,
@@ -55,24 +58,32 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  color: var(--primary);
   font-size: 24px;
   line-height: 29px;
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.auth-shell {
+  align-items: center;
 }
 
 .auth-panel {
-  width: min(100%, 520px);
-  border: 1px solid var(--neutral);
+  width: min(100%, 620px);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 24px;
-  background: #ffffff;
+  padding: 44px;
+  background: var(--surface);
 }
 
 .auth-panel h1 {
-  margin: 34px 0 16px;
-  font-size: clamp(32px, 8vw, 48px);
+  margin: 44px 0 16px;
+  color: var(--primary);
+  font-size: clamp(32px, 7vw, 40px);
   line-height: 1.1;
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .auth-panel p {
@@ -80,37 +91,42 @@ button:disabled {
   color: var(--secondary);
   font-size: 16px;
   line-height: 24px;
+  font-weight: 600;
 }
 
 .auth-form {
   display: grid;
   gap: 16px;
-  margin-top: 24px;
+  margin-top: 26px;
 }
 
 .auth-form label {
   display: grid;
   gap: 6px;
+  color: var(--primary);
   font-size: 14px;
   line-height: 20px;
+  font-weight: 400;
 }
 
 input,
 textarea,
 select {
   width: 100%;
-  color: var(--primary);
+  color: var(--on-surface);
   background: var(--surface);
-  border: 1px solid var(--neutral);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 8px 12px;
   outline: none;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
 }
 
 textarea {
   resize: vertical;
   min-height: 78px;
-  line-height: 24px;
 }
 
 input:focus,
@@ -131,7 +147,9 @@ select:focus {
   padding: 8px 16px;
   border: 1px solid var(--primary);
   font-size: 16px;
-  line-height: 24px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .button-primary {
@@ -140,8 +158,8 @@ select:focus {
 }
 
 .button-primary:hover {
-  background: var(--secondary);
-  border-color: var(--secondary);
+  background: #2b2b2b;
+  border-color: #2b2b2b;
 }
 
 .button-secondary,
@@ -160,6 +178,16 @@ select:focus {
   background: transparent;
 }
 
+.discord-button {
+  border-color: var(--tertiary);
+  background: var(--tertiary);
+}
+
+.discord-button:hover {
+  border-color: #1e40af;
+  background: #1e40af;
+}
+
 .error {
   margin-top: 16px !important;
   color: var(--error) !important;
@@ -173,7 +201,8 @@ select:focus {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: 66px minmax(0, 1fr);
+  grid-template-rows: 72px minmax(0, 1fr);
+  background: var(--surface);
 }
 
 .topbar {
@@ -181,9 +210,9 @@ select:focus {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--neutral);
-  background: #ffffff;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .topbar-meta {
@@ -200,8 +229,11 @@ select:focus {
   padding: 4px 10px;
   border-radius: 9999px;
   background: var(--neutral);
+  color: var(--primary);
   font-size: 12px;
   line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .icon-button {
@@ -210,27 +242,31 @@ select:focus {
 }
 
 .workspace {
+  width: min(100%, 1440px);
   min-height: 0;
+  margin: 0 auto;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
 
 .left-rail,
 .right-panel {
   min-height: 0;
-  padding: 24px 16px;
-  border-right: 1px solid var(--neutral);
+  padding: 26px 16px;
+  border-right: 1px solid var(--border);
   overflow: auto;
 }
 
 .right-panel {
   border-right: 0;
-  border-left: 1px solid var(--neutral);
+  border-left: 1px solid var(--border);
 }
 
 .left-rail section + section,
 .memo-block + .memo-block {
-  margin-top: 34px;
+  margin-top: 44px;
 }
 
 .section-title {
@@ -239,8 +275,10 @@ select:focus {
   gap: 8px;
   margin-bottom: 16px;
   color: var(--secondary);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .scene-list,
@@ -253,16 +291,16 @@ select:focus {
 .character-item {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 8px;
   background: transparent;
   color: var(--primary);
-  padding: 10px;
+  padding: 16px;
   text-align: left;
 }
 
 .scene-item {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .character-item {
@@ -276,13 +314,13 @@ select:focus {
 .character-item:hover,
 .scene-item.selected,
 .character-item.selected {
-  border-color: var(--neutral);
-  background: #f8f8f8;
+  border-color: var(--border);
+  background: var(--surface);
 }
 
 .scene-item.selected,
 .character-item.selected {
-  border-left-color: var(--accent);
+  border-left-color: var(--tertiary);
   border-left-width: 4px;
 }
 
@@ -290,7 +328,7 @@ select:focus {
 .character-item strong {
   font-size: 16px;
   line-height: 24px;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 .scene-item small,
@@ -300,6 +338,8 @@ select:focus {
   color: var(--secondary);
   font-size: 12px;
   line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .character-item span:last-child {
@@ -319,23 +359,25 @@ select:focus {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .scene-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 38%);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 36%);
+  gap: 26px;
   align-items: stretch;
-  padding: 24px;
-  border-bottom: 1px solid var(--neutral);
+  padding: 44px 26px 26px;
+  border-bottom: 1px solid var(--border);
 }
 
 .scene-hero h1 {
   margin: 0 0 16px;
-  font-size: clamp(32px, 5vw, 48px);
+  color: var(--primary);
+  font-size: clamp(32px, 5vw, 40px);
   line-height: 1.1;
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .scene-hero p,
@@ -343,36 +385,38 @@ select:focus {
 .memo-block p,
 .memo-block li {
   margin: 0;
+  color: var(--primary);
   font-size: 16px;
   line-height: 24px;
+  font-weight: 600;
 }
 
 .cinematic-strip {
   width: 100%;
   height: 100%;
-  min-height: 120px;
+  min-height: 132px;
   border-radius: 8px;
   display: block;
-  border: 1px solid var(--primary);
+  border: 1px solid var(--border);
 }
 
 .timeline {
   overflow: auto;
-  padding: 24px;
+  padding: 26px;
   display: grid;
   align-content: start;
   gap: 16px;
+  background: var(--neutral);
 }
 
 .message {
-  border: 1px solid var(--neutral);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .message.ooc {
-  background: #fafafa;
   border-style: dashed;
 }
 
@@ -384,16 +428,19 @@ select:focus {
 }
 
 .message-meta span {
+  color: var(--primary);
   font-size: 18px;
   line-height: 22px;
+  font-weight: 600;
 }
 
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
-  padding: 16px 24px 24px;
-  border-top: 1px solid var(--neutral);
+  padding: 16px 26px 26px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .composer-notice {
@@ -402,6 +449,7 @@ select:focus {
   color: var(--error);
   font-size: 14px;
   line-height: 20px;
+  font-weight: 400;
 }
 
 .composer textarea {
@@ -427,13 +475,13 @@ select:focus {
 .segmented button {
   height: 38px;
   border: 0;
-  background: #ffffff;
-  color: #000000;
+  background: var(--surface);
+  color: var(--primary);
 }
 
 .segmented button.active {
-  background: #000000;
-  color: #ffffff;
+  background: var(--primary);
+  color: var(--surface);
 }
 
 .send-button {
@@ -441,16 +489,19 @@ select:focus {
 }
 
 .memo-block {
-  border: 1px solid var(--neutral);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
+  background: var(--surface);
 }
 
 .memo-block h2 {
   margin: 0 0 8px;
-  font-size: 22px;
-  line-height: 26px;
-  font-weight: 400;
+  color: var(--primary);
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .memo-block ul {
@@ -460,7 +511,7 @@ select:focus {
 
 @media (max-width: 1040px) {
   .workspace {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 240px minmax(0, 1fr);
   }
 
   .right-panel {
@@ -469,6 +520,15 @@ select:focus {
 }
 
 @media (max-width: 760px) {
+  .center-screen,
+  .auth-shell {
+    padding: 16px;
+  }
+
+  .auth-panel {
+    padding: 26px 16px;
+  }
+
   .app-shell {
     grid-template-rows: auto minmax(0, 1fr);
   }
@@ -478,17 +538,23 @@ select:focus {
     padding: 12px 16px;
   }
 
+  .brand {
+    font-size: 20px;
+    line-height: 24px;
+  }
+
   .access-chip {
     display: none;
   }
 
   .workspace {
     grid-template-columns: 1fr;
+    border: 0;
   }
 
   .left-rail {
     border-right: 0;
-    border-bottom: 1px solid var(--neutral);
+    border-bottom: 1px solid var(--border);
     padding: 16px;
   }
 
@@ -499,14 +565,14 @@ select:focus {
   .scene-list,
   .character-list {
     grid-auto-flow: column;
-    grid-auto-columns: minmax(170px, 1fr);
+    grid-auto-columns: minmax(180px, 1fr);
     overflow-x: auto;
     padding-bottom: 2px;
   }
 
   .scene-hero {
     grid-template-columns: 1fr;
-    padding: 16px;
+    padding: 26px 16px 16px;
   }
 
   .timeline {

@@ -7,7 +7,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 1. Confirm required policy files exist.
 2. Build a Vite + React + TypeScript frontend.
 3. Add Supabase client integration with an auth gate.
-4. Add a private RP room interface following Applibot Light.
+4. Add a private RP room interface following Bluepoch Monochrome Editorial.
 5. Add SQL schema and RLS policies for invite-only access.
 6. Add setup documentation and environment template.
 7. Create a new Supabase project instead of reusing an existing project.
@@ -25,6 +25,8 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Supabase backend should be a new project, not colocated with existing projects.
 - Drive "login information" means access ledger fields such as email, display name, role, status, and notes. Passwords must not be stored in Drive.
 - Magic Link redirects should use `VITE_AUTH_REDIRECT_URL` when configured; otherwise they fall back to the current browser origin for local review.
+- Discord login uses Supabase Auth OAuth and remains gated by `allowed_members.email`; Discord accounts must expose an allowlisted email address.
+- External character loading is optional and uses `VITE_CHARACTER_SUPABASE_URL`, `VITE_CHARACTER_SUPABASE_ANON_KEY`, and `VITE_CHARACTER_SOURCE_TABLE`; when unavailable or blocked by RLS, room-local characters remain the fallback.
 
 ## Success Criteria
 - `npm run build` succeeds.
