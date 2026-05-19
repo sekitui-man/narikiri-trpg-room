@@ -23,7 +23,8 @@ import type { Character, CoCBackground, CoCCharacteristics, CoCSkillMap, RpMessa
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
 type AllowedMember = {
-  email: string;
+  email?: string | null;
+  discordUserId?: string | null;
   display_name: string;
   role: AccessRole;
 };
@@ -144,22 +145,47 @@ export function App() {
       return;
     }
 
-    if (!user.email) {
-      setAuthMessage('Discordアカウントのメールアドレスを取得できませんでした。Discord側でメール認証を確認してください。');
+    const discordUserId = getDiscordUserId(user);
+    const profileKey = getProfileKey(user, discordUserId);
+    if (!profileKey) {
+      setAuthMessage('ログイン元のメールアドレスまたは許可済みDiscord IDを確認できませんでした。');
       setAuthState('blocked');
       return;
     }
 
     setCurrentUserId(user.id);
-    const allowedMember = await checkAllowed(user.email);
+    const allowedMember = await checkAllowed(user.email, discordUserId);
     setCurrentAccessRole(allowedMember?.role ?? null);
-    if (allowedMember) await ensureMemberBootstrap(user.id, user.email, allowedMember);
-    if (allowedMember) await loadRoomData(user.id, user.email);
+    if (allowedMember) await ensureMemberBootstrap(user.id, profileKey, allowedMember);
+    if (allowedMember) await loadRoomData(user.id, profileKey, allowedMember);
     setAuthState(allowedMember ? 'allowed' : 'blocked');
   }
 
-  async function checkAllowed(userEmail: string) {
+  async function checkAllowed(userEmail?: string, discordUserId?: string | null) {
     if (!supabase) return null;
+
+    if (discordUserId) {
+      const { data, error } = await supabase
+        .from('allowed_discord_accounts')
+        .select('discord_user_id, display_name, role')
+        .eq('discord_user_id', discordUserId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error) {
+        setAuthMessage(error.message);
+        return null;
+      }
+      if (data) {
+        return {
+          discordUserId: data.discord_user_id,
+          display_name: data.display_name,
+          role: data.role,
+        } as AllowedMember;
+      }
+    }
+
+    if (!userEmail) return null;
     const { data, error } = await supabase
       .from('allowed_members')
       .select('email, display_name, role')
@@ -174,12 +200,12 @@ export function App() {
     return data as AllowedMember | null;
   }
 
-  async function ensureMemberBootstrap(userId: string, userEmail: string, allowedMember: AllowedMember) {
+  async function ensureMemberBootstrap(userId: string, profileKey: string, allowedMember: AllowedMember) {
     if (!supabase) return;
 
     await supabase.from('profiles').upsert({
       id: userId,
-      email: userEmail.toLowerCase(),
+      email: profileKey,
       display_name: allowedMember.display_name,
       updated_at: new Date().toISOString(),
     });
@@ -271,20 +297,13 @@ export function App() {
     ]);
   }
 
-  async function loadRoomData(userId: string, userEmail: string) {
+  async function loadRoomData(userId: string, profileKey: string, allowedMember: AllowedMember) {
     if (!supabase) return;
-
-    const { data: allowedMember } = await supabase
-      .from('allowed_members')
-      .select('display_name')
-      .eq('email', userEmail.toLowerCase())
-      .eq('is_active', true)
-      .maybeSingle();
 
     await supabase.from('profiles').upsert({
       id: userId,
-      email: userEmail.toLowerCase(),
-      display_name: allowedMember?.display_name ?? userEmail,
+      email: profileKey,
+      display_name: allowedMember.display_name,
       updated_at: new Date().toISOString(),
     });
 
@@ -613,7 +632,7 @@ export function App() {
           </div>
           <h1 id="auth-title">招待されたメンバーだけが入れるRPスペース</h1>
           <p>
-            Supabase Authでログインし、許可リストに登録されたメールアドレスだけがルームへ入れます。Discordログインも同じ許可リストで制限します。
+            Supabase Authでログインし、許可リストに登録されたメールアドレスまたはDiscordアカウントだけがルームへ入れます。
           </p>
           <form className="auth-form" onSubmit={handleSignIn}>
             <label>
@@ -1044,6 +1063,18 @@ function CinematicStrip() {
       <path d="M376 92 C398 64 438 64 466 92 Z" fill="#FFFFFF" />
     </svg>
   );
+}
+
+function getDiscordUserId(user: User) {
+  const discordIdentity = user.identities?.find((identity) => identity.provider === 'discord');
+  const identityData = discordIdentity?.identity_data;
+  const providerId = identityData?.provider_id ?? identityData?.sub ?? discordIdentity?.id;
+  return providerId ? String(providerId) : null;
+}
+
+function getProfileKey(user: User, discordUserId: string | null) {
+  if (discordUserId) return `discord:${discordUserId}`;
+  return user.email ? user.email.toLowerCase() : null;
 }
 
 function normalizeCharacter(character: Partial<Character> & { id: string; name?: string }): Character {

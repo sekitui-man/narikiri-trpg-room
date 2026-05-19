@@ -23,6 +23,17 @@ insert into public.allowed_members (email, display_name)
 values ('player@example.com', 'Player Name');
 ```
 
+To allow a specific Discord account, add its Discord user ID:
+
+```sql
+insert into public.allowed_discord_accounts (discord_user_id, display_name, role)
+values ('600301816315379723', 'Hinata', 'owner')
+on conflict (discord_user_id) do update
+  set display_name = excluded.display_name,
+      role = excluded.role,
+      is_active = true;
+```
+
 For a developer/room owner account:
 
 ```sql
@@ -43,10 +54,10 @@ Characters are stored in `public.characters` inside this project. Each character
 ## Access Model
 
 - A user must be authenticated.
-- Their email must exist in `public.allowed_members` with `is_active = true`.
+- Their email must exist in `public.allowed_members` with `is_active = true`, or their Discord OAuth provider ID must exist in `public.allowed_discord_accounts` with `is_active = true`.
 - They must also exist in `public.room_members` for a room to read or post inside that room.
 - An `owner` or `gm` allowlist role can bootstrap the first room on first login.
-- Discord OAuth users are still restricted by the same email allowlist. The Discord account must expose an email address that exists in `public.allowed_members`.
+- Discord OAuth users are restricted by Supabase Auth's `auth.identities.provider_id`, so the allowlist can target a specific Discord account even if the email changes.
 
 The frontend only uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Do not put a Supabase service-role key in `.env` for this app.
 
@@ -86,6 +97,7 @@ Current alpha deployment resources:
 - GitHub repository: [sekitui-man/narikiri-trpg-room](https://github.com/sekitui-man/narikiri-trpg-room)
 - Supabase project: `narikiri-trpg-room` / `ucksbyrytxsowuowooco`
 - Access ledger: [Narikiri TRPG Room Access List](https://docs.google.com/spreadsheets/d/1yy_lUqoI19WnkzOqJ-Sk7rkCHWGc7jjpokb5umglto0/edit)
+- Allowed Discord owner ID: `600301816315379723`
 
 ## Security Checks
 

@@ -17,7 +17,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 11. Log the cycle result.
 
 ## Ambiguity Resolutions
-- "指定した人間だけ" means users whose email exists in `public.allowed_members` and whose user id is a member of a room.
+- "指定した人間だけ" means users whose email exists in `public.allowed_members` or whose Discord provider ID exists in `public.allowed_discord_accounts`, and whose user id is a member of a room.
 - Alpha authentication uses Supabase Auth email/password plus magic link compatible client calls; the app UI exposes email/password for local clarity.
 - When Supabase env vars are missing, the app runs in local demo mode so the interface can be reviewed without a backend.
 - The first room and sample data are represented in frontend demo state; real production data comes from Supabase tables after applying the SQL.
@@ -25,7 +25,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Supabase backend should be a new project, not colocated with existing projects.
 - Drive "login information" means access ledger fields such as email, display name, role, status, and notes. Passwords must not be stored in Drive.
 - Magic Link redirects should use `VITE_AUTH_REDIRECT_URL` when configured; otherwise they fall back to the current browser origin for local review.
-- Discord login uses Supabase Auth OAuth and remains gated by `allowed_members.email`; Discord accounts must expose an allowlisted email address.
+- Discord login uses Supabase Auth OAuth and is gated by `auth.identities.provider_id` against `public.allowed_discord_accounts`; email allowlisting remains available for email login.
 - Characters are stored inside the `narikiri-trpg-room` Supabase project. The `characters` table supports CoC 6th edition investigator fields and per-user ownership; owners manage their own characters, while room `owner`/`gm` members can manage room characters.
 
 ## Success Criteria

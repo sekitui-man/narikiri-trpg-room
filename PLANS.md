@@ -14,7 +14,7 @@
 ## Product Scope
 - Email magic-link/password authentication through Supabase Auth.
 - Discord OAuth authentication through Supabase Auth.
-- Access gated by an `allowed_members` table.
+- Access gated by email allowlist and Discord provider ID allowlist tables.
 - Text-based RP timeline.
 - Character selection and IC/OOC posting mode.
 - Scene memo and character notes panel.

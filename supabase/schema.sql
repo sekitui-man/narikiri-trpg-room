@@ -9,6 +9,15 @@ create table if not exists public.allowed_members (
   check (email = lower(email))
 );
 
+create table if not exists public.allowed_discord_accounts (
+  discord_user_id text primary key,
+  display_name text not null,
+  role text not null default 'player' check (role in ('owner', 'gm', 'player', 'viewer')),
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  check (discord_user_id ~ '^[0-9]{17,20}$')
+);
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
@@ -96,6 +105,65 @@ create table if not exists public.rp_messages (
   created_at timestamptz not null default now()
 );
 
+create or replace function app_private.current_discord_user_id()
+returns text
+language sql
+security definer
+set search_path = auth, public
+stable
+as $$
+  select identity.provider_id
+  from auth.identities identity
+  where identity.user_id = (select auth.uid())
+    and identity.provider = 'discord'
+  order by identity.last_sign_in_at desc nulls last, identity.created_at desc nulls last
+  limit 1;
+$$;
+
+create or replace function app_private.current_profile_key()
+returns text
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select coalesce(
+    (
+      select 'discord:' || discord.discord_user_id
+      from public.allowed_discord_accounts discord
+      where discord.discord_user_id = app_private.current_discord_user_id()
+        and discord.is_active = true
+      limit 1
+    ),
+    lower((select auth.jwt() ->> 'email'))
+  );
+$$;
+
+create or replace function app_private.current_access_role()
+returns text
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select coalesce(
+    (
+      select allowed.role
+      from public.allowed_members allowed
+      where allowed.email = lower((select auth.jwt() ->> 'email'))
+        and allowed.is_active = true
+      limit 1
+    ),
+    (
+      select discord.role
+      from public.allowed_discord_accounts discord
+      where discord.discord_user_id = app_private.current_discord_user_id()
+        and discord.is_active = true
+      limit 1
+    )
+  );
+$$;
+
 create or replace function app_private.is_allowed_member()
 returns boolean
 language sql
@@ -103,12 +171,7 @@ security definer
 set search_path = public, auth
 stable
 as $$
-  select exists (
-    select 1
-    from public.allowed_members allowed
-    where allowed.email = lower((select auth.jwt() ->> 'email'))
-      and allowed.is_active = true
-  );
+  select app_private.current_access_role() is not null;
 $$;
 
 create or replace function app_private.is_room_member(target_room_id uuid)
@@ -128,6 +191,7 @@ as $$
 $$;
 
 alter table public.allowed_members enable row level security;
+alter table public.allowed_discord_accounts enable row level security;
 alter table public.profiles enable row level security;
 alter table public.rooms enable row level security;
 alter table public.room_members enable row level security;
@@ -136,6 +200,7 @@ alter table public.scenes enable row level security;
 alter table public.rp_messages enable row level security;
 
 grant select on public.allowed_members to authenticated;
+grant select on public.allowed_discord_accounts to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update on public.rooms to authenticated;
 grant select, insert, update, delete on public.room_members to authenticated;
@@ -148,6 +213,12 @@ on public.allowed_members
 for select
 to authenticated
 using (email = lower(((select auth.jwt()) ->> 'email')) and is_active = true);
+
+create policy "Allowed Discord users can confirm their own allowlist entry"
+on public.allowed_discord_accounts
+for select
+to authenticated
+using (discord_user_id = app_private.current_discord_user_id() and is_active = true);
 
 create policy "Allowed users can read their own profile"
 on public.profiles
@@ -162,7 +233,7 @@ to authenticated
 with check (
   app_private.is_allowed_member()
   and id = (select auth.uid())
-  and email = lower(((select auth.jwt()) ->> 'email'))
+  and email = app_private.current_profile_key()
 );
 
 create policy "Allowed users can update their own profile"
@@ -173,7 +244,7 @@ using (app_private.is_allowed_member() and id = (select auth.uid()))
 with check (
   app_private.is_allowed_member()
   and id = (select auth.uid())
-  and email = lower(((select auth.jwt()) ->> 'email'))
+  and email = app_private.current_profile_key()
 );
 
 create policy "Room members can read rooms"
@@ -189,13 +260,7 @@ to authenticated
 with check (
   app_private.is_allowed_member()
   and created_by = (select auth.uid())
-  and exists (
-    select 1
-    from public.allowed_members allowed
-    where allowed.email = lower(((select auth.jwt()) ->> 'email'))
-      and allowed.is_active = true
-      and allowed.role in ('owner', 'gm')
-  )
+  and app_private.current_access_role() in ('owner', 'gm')
 );
 
 create policy "Room owners and GMs can update rooms"
@@ -421,3 +486,63 @@ create index if not exists rp_messages_room_id_created_at_idx on public.rp_messa
 create index if not exists rp_messages_scene_id_idx on public.rp_messages(scene_id);
 create index if not exists rp_messages_character_id_idx on public.rp_messages(character_id);
 create index if not exists rp_messages_author_id_idx on public.rp_messages(author_id);
+
+insert into public.allowed_discord_accounts (discord_user_id, display_name, role, is_active)
+values ('600301816315379723', 'Hinata', 'owner', true)
+on conflict (discord_user_id) do update
+  set display_name = excluded.display_name,
+      role = excluded.role,
+      is_active = excluded.is_active;
+
+create or replace function app_private.handle_allowed_discord_identity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  allowed_account public.allowed_discord_accounts%rowtype;
+  first_room_id uuid;
+begin
+  if new.provider <> 'discord' then
+    return new;
+  end if;
+
+  select *
+  into allowed_account
+  from public.allowed_discord_accounts
+  where discord_user_id = new.provider_id
+    and is_active = true;
+
+  if not found then
+    return new;
+  end if;
+
+  insert into public.profiles (id, email, display_name, updated_at)
+  values (new.user_id, 'discord:' || new.provider_id, allowed_account.display_name, now())
+  on conflict (id) do update
+    set display_name = excluded.display_name,
+        updated_at = excluded.updated_at;
+
+  select id
+  into first_room_id
+  from public.rooms
+  order by created_at
+  limit 1;
+
+  if first_room_id is not null then
+    insert into public.room_members (room_id, user_id, role)
+    values (first_room_id, new.user_id, allowed_account.role)
+    on conflict (room_id, user_id) do update
+      set role = excluded.role;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_allowed_discord_identity on auth.identities;
+create trigger sync_allowed_discord_identity
+after insert or update of provider_id, provider, user_id on auth.identities
+for each row
+execute function app_private.handle_allowed_discord_identity();
