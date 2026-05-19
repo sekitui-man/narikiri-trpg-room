@@ -287,6 +287,11 @@ select:focus {
   gap: 6px;
 }
 
+.rail-action {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
 .scene-item,
 .character-item {
   width: 100%;
@@ -495,6 +500,99 @@ select:focus {
   background: var(--surface);
 }
 
+.character-editor {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 26px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.editor-heading h2,
+.editor-section h3 {
+  margin: 0;
+  color: var(--primary);
+  letter-spacing: 0;
+}
+
+.editor-heading h2 {
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.editor-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.editor-section h3 {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--secondary);
+  letter-spacing: 0.02em;
+}
+
+.character-editor label {
+  display: grid;
+  gap: 6px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.field-grid,
+.stat-grid,
+.derived-grid,
+.editor-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.field-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.derived-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.derived-grid span {
+  border-radius: 9999px;
+  background: var(--neutral);
+  padding: 4px 10px;
+  color: var(--primary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+.editor-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
 .memo-block h2 {
   margin: 0 0 8px;
   color: var(--primary);
@@ -515,7 +613,9 @@ select:focus {
   }
 
   .right-panel {
-    display: none;
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--border);
   }
 }
 
@@ -558,6 +658,11 @@ select:focus {
     padding: 16px;
   }
 
+  .right-panel {
+    border-top: 1px solid var(--border);
+    padding: 16px;
+  }
+
   .left-rail section + section {
     margin-top: 16px;
   }
@@ -596,5 +701,15 @@ select:focus {
   .segmented {
     width: 100%;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .field-grid.two,
+  .field-grid.three {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid,
+  .derived-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
+  Archive,
   BookOpen,
   DoorOpen,
   Lock,
@@ -9,13 +10,15 @@ import {
   MessageCircle,
   MessageSquareText,
   PanelRight,
+  Plus,
+  Save,
   Send,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
-import { characterSourceSupabase, isSupabaseConfigured, supabase } from './supabase';
+import { isSupabaseConfigured, supabase } from './supabase';
 import { demoCharacters, demoMessages, demoScenes } from './demoData';
-import type { Character, RpMessage, Scene } from './types';
+import type { Character, CoCBackground, CoCCharacteristics, CoCSkillMap, RpMessage, Scene } from './types';
 
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
@@ -24,17 +27,46 @@ type AllowedMember = {
   display_name: string;
   role: AccessRole;
 };
-type ExternalCharacterRow = {
-  id?: string;
-  scenario_name?: string | null;
-  status?: string | null;
-  participants?: unknown;
-};
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
-const characterSourceTable = (import.meta.env.VITE_CHARACTER_SOURCE_TABLE as string | undefined)?.trim() || 'scenario_plans';
 const magicLinkCooldownSeconds = 60;
-const externalCharacterColors = ['#090909', '#1D4ED8', '#6B7280', '#BFC3C9'];
+const characteristicKeys: Array<keyof CoCCharacteristics> = ['str', 'con', 'siz', 'int', 'pow', 'dex', 'app', 'edu'];
+const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
+  { key: 'description', label: '外見・描写' },
+  { key: 'ideology', label: '思想・信条' },
+  { key: 'significantPeople', label: '重要な人物' },
+  { key: 'meaningfulLocations', label: '意味のある場所' },
+  { key: 'treasuredPossessions', label: '秘蔵品' },
+  { key: 'traits', label: '特徴' },
+  { key: 'injuries', label: '負傷・傷跡' },
+  { key: 'phobias', label: '恐怖症・マニア' },
+  { key: 'tomes', label: '魔導書・呪文' },
+  { key: 'encounters', label: '遭遇した神話存在' },
+];
+
+const defaultCharacteristics: CoCCharacteristics = {
+  str: 10,
+  con: 10,
+  siz: 10,
+  int: 10,
+  pow: 10,
+  dex: 10,
+  app: 10,
+  edu: 10,
+};
+
+const defaultBackground: CoCBackground = {
+  description: '',
+  ideology: '',
+  significantPeople: '',
+  meaningfulLocations: '',
+  treasuredPossessions: '',
+  traits: '',
+  injuries: '',
+  phobias: '',
+  tomes: '',
+  encounters: '',
+};
 
 export function App() {
   const [authState, setAuthState] = useState<AuthState>(isSupabaseConfigured ? 'checking' : 'demo');
@@ -42,6 +74,7 @@ export function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('');
+  const [currentAccessRole, setCurrentAccessRole] = useState<AccessRole | null>(null);
   const [isMagicLinkSending, setIsMagicLinkSending] = useState(false);
   const [magicLinkCooldown, setMagicLinkCooldown] = useState(0);
   const [characters, setCharacters] = useState<Character[]>(demoCharacters);
@@ -52,6 +85,8 @@ export function App() {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [mode, setMode] = useState<'ic' | 'ooc'>('ic');
   const [draft, setDraft] = useState('');
+  const [characterDraft, setCharacterDraft] = useState<Character>(demoCharacters[0]);
+  const [skillDraft, setSkillDraft] = useState(formatSkills(demoCharacters[0].skills));
 
   useEffect(() => {
     if (!supabase) return;
@@ -79,6 +114,12 @@ export function App() {
 
   const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
   const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
+  const activeDerived = deriveCoCValues(characterDraft);
+  const canManageActiveCharacter =
+    authState === 'demo' ||
+    characterDraft.ownerId === currentUserId ||
+    currentAccessRole === 'owner' ||
+    currentAccessRole === 'gm';
 
   const groupedMessages = useMemo(
     () =>
@@ -89,10 +130,17 @@ export function App() {
     [characters, messages],
   );
 
+  useEffect(() => {
+    if (!activeCharacter) return;
+    setCharacterDraft(activeCharacter);
+    setSkillDraft(formatSkills(activeCharacter.skills));
+  }, [activeCharacter?.id]);
+
   async function handleAuthenticatedUser(user: User | null) {
     if (!user) {
       setAuthState('signed-out');
       setCurrentUserId(null);
+      setCurrentAccessRole(null);
       return;
     }
 
@@ -104,13 +152,14 @@ export function App() {
 
     setCurrentUserId(user.id);
     const allowedMember = await checkAllowed(user.email);
+    setCurrentAccessRole(allowedMember?.role ?? null);
     if (allowedMember) await ensureMemberBootstrap(user.id, user.email, allowedMember);
     if (allowedMember) await loadRoomData(user.id, user.email);
     setAuthState(allowedMember ? 'allowed' : 'blocked');
   }
 
   async function checkAllowed(userEmail: string) {
-    if (!supabase) return false;
+    if (!supabase) return null;
     const { data, error } = await supabase
       .from('allowed_members')
       .select('email, display_name, role')
@@ -120,7 +169,7 @@ export function App() {
 
     if (error) {
       setAuthMessage(error.message);
-      return false;
+      return null;
     }
     return data as AllowedMember | null;
   }
@@ -187,17 +236,36 @@ export function App() {
           room_id: room.id,
           owner_id: userId,
           name: '蓮',
-          archetype: '情報屋',
+          player_name: allowedMember.display_name,
+          archetype: '私立探偵',
           color: '#000000',
           memo: '表向きは酒場の常連。相手の嘘に気づいても、すぐには指摘しない。',
+          occupation: '私立探偵',
+          age: '32',
+          gender: '男性',
+          residence: '東京',
+          birthplace: '横浜',
+          characteristics: defaultCharacteristics,
+          skills: { 目星: 65, 聞き耳: 55, 図書館: 60, 心理学: 45, 説得: 50 },
+          weapons: 'こぶし 50%, 拳銃 40%',
+          possessions: '手帳、万年筆、古い鍵',
+          background: defaultBackground,
+          sanity_current: 50,
+          hit_points_current: 10,
+          magic_points_current: 10,
         },
         {
           room_id: room.id,
           owner_id: null,
           name: '語り手',
+          player_name: 'GM',
           archetype: '進行',
           color: '#666666',
           memo: '場面描写、NPC、判定結果を担当する。',
+          occupation: 'NPC',
+          characteristics: defaultCharacteristics,
+          skills: {},
+          background: defaultBackground,
         },
       ]),
     ]);
@@ -247,8 +315,11 @@ export function App() {
         .order('created_at', { ascending: true }),
       supabase
         .from('characters')
-        .select('id, name, archetype, color, memo, owner_id')
+        .select(
+          'id, name, player_name, archetype, color, memo, owner_id, occupation, age, gender, residence, birthplace, characteristics, skills, weapons, possessions, background, sanity_current, hit_points_current, magic_points_current, is_archived',
+        )
         .eq('room_id', firstRoom.id)
+        .eq('is_archived', false)
         .order('created_at', { ascending: true }),
       supabase
         .from('rp_messages')
@@ -263,19 +334,32 @@ export function App() {
       setSelectedSceneId(remoteScenes[0].id);
     }
 
-    const externalCharacters = await loadExternalCharacters();
-    if (externalCharacters.length) {
-      setCharacters(externalCharacters);
-      setSelectedCharacterId(externalCharacters[0].id);
-    } else if (remoteCharacters?.length) {
-      const mappedCharacters = remoteCharacters.map((character) => ({
-        id: character.id,
-        name: character.name,
-        player: character.owner_id ? 'Player' : 'Shared',
-        archetype: character.archetype,
-        color: character.color,
-        memo: character.memo,
-      }));
+    if (remoteCharacters?.length) {
+      const mappedCharacters = remoteCharacters.map((character) => {
+        return normalizeCharacter({
+          id: character.id,
+          name: character.name,
+          ownerId: character.owner_id,
+          player: character.player_name ?? (character.owner_id ? 'Player' : 'Shared'),
+          archetype: character.archetype,
+          color: character.color,
+          memo: character.memo,
+          occupation: character.occupation,
+          age: character.age,
+          gender: character.gender,
+          residence: character.residence,
+          birthplace: character.birthplace,
+          characteristics: character.characteristics,
+          skills: character.skills,
+          weapons: character.weapons,
+          possessions: character.possessions,
+          background: character.background,
+          sanityCurrent: character.sanity_current,
+          hitPointsCurrent: character.hit_points_current,
+          magicPointsCurrent: character.magic_points_current,
+          isArchived: character.is_archived,
+        });
+      });
       setCharacters(mappedCharacters);
       setSelectedCharacterId(mappedCharacters[0].id);
     }
@@ -347,39 +431,6 @@ export function App() {
     if (error) setAuthMessage(error.message);
   }
 
-  async function loadExternalCharacters(): Promise<Character[]> {
-    if (!characterSourceSupabase) return [];
-
-    const { data, error } = await characterSourceSupabase
-      .from(characterSourceTable)
-      .select('id, scenario_name, status, participants')
-      .order('updated_at', { ascending: false })
-      .limit(8);
-
-    if (error || !data?.length) return [];
-
-    return (data as ExternalCharacterRow[]).flatMap((row, rowIndex) => {
-      const participants = Array.isArray(row.participants) ? row.participants : [];
-      return participants.map((participant, participantIndex) => {
-        const source =
-          typeof participant === 'object' && participant !== null ? (participant as Record<string, unknown>) : {};
-        const fallbackName = typeof participant === 'string' ? participant : `Participant ${participantIndex + 1}`;
-        const name = String(
-          source.character_name ?? source.characterName ?? source.name ?? source.display_name ?? fallbackName,
-        );
-
-        return {
-          id: `external-${row.id ?? rowIndex}-${participantIndex}`,
-          name,
-          player: String(source.player ?? source.user ?? source.display_name ?? 'External DB'),
-          archetype: String(source.role ?? source.type ?? row.status ?? 'Participant'),
-          color: String(source.color ?? externalCharacterColors[participantIndex % externalCharacterColors.length]),
-          memo: String(source.memo ?? row.scenario_name ?? '外部TRPG DBから取得したキャラクターです。'),
-        };
-      });
-    });
-  }
-
   async function handleSignOut() {
     if (!supabase) {
       setAuthState('demo');
@@ -388,6 +439,7 @@ export function App() {
     await supabase.auth.signOut();
     setAuthState('signed-out');
     setCurrentUserId(null);
+    setCurrentAccessRole(null);
   }
 
   async function handleSend(event: FormEvent<HTMLFormElement>) {
@@ -441,6 +493,105 @@ export function App() {
 
     setMessages((current) => [...current, nextMessage]);
     setDraft('');
+  }
+
+  async function handleCreateCharacter() {
+    const nextCharacter = createDefaultCharacter(currentUserId);
+
+    if (supabase && authState === 'allowed' && selectedRoomId && currentUserId) {
+      const { data, error } = await supabase
+        .from('characters')
+        .insert(toCharacterInsert(nextCharacter, selectedRoomId, currentUserId))
+        .select(
+          'id, name, player_name, archetype, color, memo, owner_id, occupation, age, gender, residence, birthplace, characteristics, skills, weapons, possessions, background, sanity_current, hit_points_current, magic_points_current, is_archived',
+        )
+        .single();
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+
+      const created = normalizeCharacter({
+        id: data.id,
+        name: data.name,
+        ownerId: data.owner_id,
+        player: data.player_name,
+        archetype: data.archetype,
+        color: data.color,
+        memo: data.memo,
+        occupation: data.occupation,
+        age: data.age,
+        gender: data.gender,
+        residence: data.residence,
+        birthplace: data.birthplace,
+        characteristics: data.characteristics,
+        skills: data.skills,
+        weapons: data.weapons,
+        possessions: data.possessions,
+        background: data.background,
+        sanityCurrent: data.sanity_current,
+        hitPointsCurrent: data.hit_points_current,
+        magicPointsCurrent: data.magic_points_current,
+        isArchived: data.is_archived,
+      });
+      setCharacters((current) => [...current, created]);
+      setSelectedCharacterId(created.id);
+      setAuthMessage('探索者を作成しました。');
+      return;
+    }
+
+    setCharacters((current) => [...current, nextCharacter]);
+    setSelectedCharacterId(nextCharacter.id);
+  }
+
+  async function handleSaveCharacter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsedSkills = parseSkills(skillDraft);
+    const nextCharacter = normalizeCharacter({ ...characterDraft, skills: parsedSkills });
+
+    if (supabase && authState === 'allowed' && selectedRoomId) {
+      const { error } = await supabase
+        .from('characters')
+        .update(toCharacterUpdate(nextCharacter))
+        .eq('id', nextCharacter.id)
+        .eq('room_id', selectedRoomId);
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+      setAuthMessage('探索者を保存しました。');
+    }
+
+    setCharacters((current) =>
+      current.map((character) => (character.id === nextCharacter.id ? nextCharacter : character)),
+    );
+    setCharacterDraft(nextCharacter);
+    setSkillDraft(formatSkills(nextCharacter.skills));
+  }
+
+  async function handleArchiveCharacter() {
+    if (!activeCharacter) return;
+
+    if (supabase && authState === 'allowed' && selectedRoomId) {
+      const { error } = await supabase
+        .from('characters')
+        .update({ is_archived: true })
+        .eq('id', activeCharacter.id)
+        .eq('room_id', selectedRoomId);
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+    }
+
+    setCharacters((current) => {
+      const nextCharacters = current.filter((character) => character.id !== activeCharacter.id);
+      setSelectedCharacterId(nextCharacters[0]?.id ?? demoCharacters[0].id);
+      return nextCharacters.length ? nextCharacters : [createDefaultCharacter(currentUserId)];
+    });
   }
 
   if (authState === 'checking') {
@@ -558,6 +709,10 @@ export function App() {
               <UserRound size={16} />
               Characters
             </div>
+            <button className="button-secondary rail-action" type="button" onClick={handleCreateCharacter}>
+              <Plus size={16} />
+              新規探索者
+            </button>
             <div className="character-list">
               {characters.map((character) => (
                 <button
@@ -633,13 +788,232 @@ export function App() {
         <aside className="right-panel" aria-label="メモ">
           <div className="section-title">
             <PanelRight size={16} />
-            Inspector
+            Investigator
           </div>
-          <section className="memo-block">
-            <h2>{activeCharacter.name}</h2>
-            <p className="muted">{activeCharacter.player} / {activeCharacter.archetype}</p>
-            <p>{activeCharacter.memo}</p>
-          </section>
+          <form className="character-editor" onSubmit={handleSaveCharacter}>
+            <div className="editor-heading">
+              <h2>{characterDraft.name}</h2>
+              <span className="access-chip">{characterDraft.ownerId === currentUserId ? 'MY PC' : 'ROOM PC'}</span>
+            </div>
+
+            <div className="field-grid two">
+              <label>
+                名前
+                <input
+                  value={characterDraft.name}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                プレイヤー
+                <input
+                  value={characterDraft.player}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, player: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                職業
+                <input
+                  value={characterDraft.occupation}
+                  onChange={(event) =>
+                    setCharacterDraft({
+                      ...characterDraft,
+                      occupation: event.target.value,
+                      archetype: event.target.value || characterDraft.archetype,
+                    })
+                  }
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                年齢
+                <input
+                  value={characterDraft.age}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, age: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                性別
+                <input
+                  value={characterDraft.gender}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, gender: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                色
+                <input
+                  value={characterDraft.color}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, color: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                住所
+                <input
+                  value={characterDraft.residence}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, residence: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                出身
+                <input
+                  value={characterDraft.birthplace}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, birthplace: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+            </div>
+
+            <section className="editor-section">
+              <h3>Characteristics</h3>
+              <div className="stat-grid">
+                {characteristicKeys.map((key) => (
+                  <label key={key}>
+                    {key.toUpperCase()}
+                    <input
+                      type="number"
+                      min="0"
+                      max="99"
+                      value={characterDraft.characteristics[key]}
+                      onChange={(event) =>
+                        setCharacterDraft({
+                          ...characterDraft,
+                          characteristics: {
+                            ...characterDraft.characteristics,
+                            [key]: Number(event.target.value),
+                          },
+                        })
+                      }
+                      disabled={!canManageActiveCharacter}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="derived-grid">
+                <span>Idea {activeDerived.idea}</span>
+                <span>Luck {activeDerived.luck}</span>
+                <span>Know {activeDerived.know}</span>
+                <span>SAN Max {activeDerived.sanityMax}</span>
+              </div>
+            </section>
+
+            <section className="editor-section">
+              <h3>Status</h3>
+              <div className="field-grid three">
+                <label>
+                  SAN
+                  <input
+                    type="number"
+                    value={characterDraft.sanityCurrent}
+                    onChange={(event) =>
+                      setCharacterDraft({ ...characterDraft, sanityCurrent: Number(event.target.value) })
+                    }
+                    disabled={!canManageActiveCharacter}
+                  />
+                </label>
+                <label>
+                  HP / {activeDerived.hitPointsMax}
+                  <input
+                    type="number"
+                    value={characterDraft.hitPointsCurrent}
+                    onChange={(event) =>
+                      setCharacterDraft({ ...characterDraft, hitPointsCurrent: Number(event.target.value) })
+                    }
+                    disabled={!canManageActiveCharacter}
+                  />
+                </label>
+                <label>
+                  MP / {activeDerived.magicPointsMax}
+                  <input
+                    type="number"
+                    value={characterDraft.magicPointsCurrent}
+                    onChange={(event) =>
+                      setCharacterDraft({ ...characterDraft, magicPointsCurrent: Number(event.target.value) })
+                    }
+                    disabled={!canManageActiveCharacter}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="editor-section">
+              <h3>Skills</h3>
+              <textarea
+                value={skillDraft}
+                onChange={(event) => setSkillDraft(event.target.value)}
+                placeholder={'目星: 65\n聞き耳: 55\n図書館: 60'}
+                disabled={!canManageActiveCharacter}
+              />
+            </section>
+
+            <section className="editor-section">
+              <h3>Equipment</h3>
+              <label>
+                武器
+                <textarea
+                  value={characterDraft.weapons}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, weapons: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+              <label>
+                所持品
+                <textarea
+                  value={characterDraft.possessions}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, possessions: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+            </section>
+
+            <section className="editor-section">
+              <h3>Background</h3>
+              {backgroundFields.map((field) => (
+                <label key={field.key}>
+                  {field.label}
+                  <textarea
+                    value={characterDraft.background[field.key]}
+                    onChange={(event) =>
+                      setCharacterDraft({
+                        ...characterDraft,
+                        background: { ...characterDraft.background, [field.key]: event.target.value },
+                      })
+                    }
+                    disabled={!canManageActiveCharacter}
+                  />
+                </label>
+              ))}
+              <label>
+                メモ
+                <textarea
+                  value={characterDraft.memo}
+                  onChange={(event) => setCharacterDraft({ ...characterDraft, memo: event.target.value })}
+                  disabled={!canManageActiveCharacter}
+                />
+              </label>
+            </section>
+
+            <div className="editor-actions">
+              <button className="button-primary" type="submit" disabled={!canManageActiveCharacter}>
+                <Save size={16} />
+                保存
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={handleArchiveCharacter}
+                disabled={!canManageActiveCharacter}
+              >
+                <Archive size={16} />
+                アーカイブ
+              </button>
+            </div>
+          </form>
           <section className="memo-block">
             <h2>Scene Memo</h2>
             <p>{activeScene.summary}</p>
@@ -670,4 +1044,134 @@ function CinematicStrip() {
       <path d="M376 92 C398 64 438 64 466 92 Z" fill="#FFFFFF" />
     </svg>
   );
+}
+
+function normalizeCharacter(character: Partial<Character> & { id: string; name?: string }): Character {
+  const characteristics = { ...defaultCharacteristics, ...(character.characteristics ?? {}) };
+  const skills = normalizeSkills(character.skills);
+  const sanityDefault = characteristics.pow * 5;
+  const hitPointDefault = Math.ceil((characteristics.con + characteristics.siz) / 2);
+
+  return {
+    id: character.id,
+    name: character.name ?? '新規探索者',
+    ownerId: character.ownerId ?? null,
+    player: character.player ?? '',
+    archetype: character.archetype ?? character.occupation ?? '',
+    color: character.color ?? '#090909',
+    memo: character.memo ?? '',
+    occupation: character.occupation ?? character.archetype ?? '',
+    age: character.age ?? '',
+    gender: character.gender ?? '',
+    residence: character.residence ?? '',
+    birthplace: character.birthplace ?? '',
+    characteristics,
+    skills,
+    weapons: character.weapons ?? '',
+    possessions: character.possessions ?? '',
+    background: { ...defaultBackground, ...(character.background ?? {}) },
+    sanityCurrent: Number(character.sanityCurrent ?? sanityDefault),
+    hitPointsCurrent: Number(character.hitPointsCurrent ?? hitPointDefault),
+    magicPointsCurrent: Number(character.magicPointsCurrent ?? characteristics.pow),
+    isArchived: Boolean(character.isArchived),
+  };
+}
+
+function createDefaultCharacter(ownerId: string | null): Character {
+  const id = crypto.randomUUID();
+  const characteristics = { ...defaultCharacteristics };
+  return normalizeCharacter({
+    id,
+    ownerId,
+    name: '新規探索者',
+    player: '',
+    archetype: '探索者',
+    color: '#090909',
+    occupation: '',
+    characteristics,
+    skills: {
+      目星: 25,
+      聞き耳: 25,
+      図書館: 25,
+      回避: characteristics.dex * 2,
+      母国語: characteristics.edu * 5,
+      クトゥルフ神話: 0,
+    },
+  });
+}
+
+function deriveCoCValues(character: Character) {
+  const { con, siz, int, pow, edu } = character.characteristics;
+  const cthulhuMythos = character.skills['クトゥルフ神話'] ?? character.skills['Cthulhu Mythos'] ?? 0;
+
+  return {
+    idea: int * 5,
+    luck: pow * 5,
+    know: edu * 5,
+    sanityMax: Math.max(0, 99 - cthulhuMythos),
+    hitPointsMax: Math.ceil((con + siz) / 2),
+    magicPointsMax: pow,
+  };
+}
+
+function normalizeSkills(skills: unknown): CoCSkillMap {
+  if (!skills || typeof skills !== 'object' || Array.isArray(skills)) return {};
+
+  return Object.fromEntries(
+    Object.entries(skills as Record<string, unknown>)
+      .map(([name, value]) => [name.trim(), Number(value)])
+      .filter(([name, value]) => Boolean(name) && Number.isFinite(value)),
+  );
+}
+
+function formatSkills(skills: CoCSkillMap) {
+  return Object.entries(skills)
+    .map(([name, value]) => `${name}: ${value}`)
+    .join('\n');
+}
+
+function parseSkills(value: string): CoCSkillMap {
+  return Object.fromEntries(
+    value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [name, rawValue] = line.split(/[:：]/);
+        return [name.trim(), Number(rawValue)];
+      })
+      .filter(([name, score]) => Boolean(name) && Number.isFinite(score)),
+  );
+}
+
+function toCharacterInsert(character: Character, roomId: string, ownerId: string) {
+  return {
+    ...toCharacterUpdate(character),
+    room_id: roomId,
+    owner_id: ownerId,
+  };
+}
+
+function toCharacterUpdate(character: Character) {
+  return {
+    name: character.name,
+    player_name: character.player,
+    archetype: character.occupation || character.archetype,
+    color: character.color,
+    memo: character.memo,
+    occupation: character.occupation,
+    age: character.age,
+    gender: character.gender,
+    residence: character.residence,
+    birthplace: character.birthplace,
+    characteristics: character.characteristics,
+    skills: character.skills,
+    weapons: character.weapons,
+    possessions: character.possessions,
+    background: character.background,
+    sanity_current: character.sanityCurrent,
+    hit_points_current: character.hitPointsCurrent,
+    magic_points_current: character.magicPointsCurrent,
+    is_archived: character.isArchived,
+  };
 }

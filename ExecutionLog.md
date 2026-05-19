@@ -21,3 +21,5 @@
 - Set Cloudflare Pages production and preview environment variable `VITE_AUTH_REDIRECT_URL=https://narikiri-trpg-room.pages.dev`.
 - Added Magic Link send cooldown UI and documented Supabase built-in Auth email rate limit behavior.
 - Updated UI styling to Bluepoch Monochrome Editorial, added Discord OAuth login entry point, and added optional external Supabase character source configuration.
+- Replaced external character-source plan with internal CoC 6th edition investigator fields on `public.characters`, including per-user ownership management.
+- Updated `characters` insert RLS so room `owner`/`gm` members can create shared room characters while players remain limited to their own characters.

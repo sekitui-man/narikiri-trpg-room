@@ -18,7 +18,7 @@
 - Text-based RP timeline.
 - Character selection and IC/OOC posting mode.
 - Scene memo and character notes panel.
-- Optional character import from a configured external Supabase character source.
+- Internal CoC 6th edition investigator database with per-user character ownership.
 - Supabase SQL schema with RLS policies for invited room members.
 
 ## Out Of Scope For Alpha

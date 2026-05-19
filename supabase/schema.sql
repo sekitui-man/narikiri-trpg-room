@@ -39,11 +39,42 @@ create table if not exists public.characters (
   room_id uuid not null references public.rooms(id) on delete cascade,
   owner_id uuid references public.profiles(id) on delete set null,
   name text not null,
+  player_name text not null default '',
   archetype text not null default '',
   color text not null default '#000000',
   memo text not null default '',
+  occupation text not null default '',
+  age text not null default '',
+  gender text not null default '',
+  residence text not null default '',
+  birthplace text not null default '',
+  characteristics jsonb not null default '{"str":10,"con":10,"siz":10,"int":10,"pow":10,"dex":10,"app":10,"edu":10}'::jsonb,
+  skills jsonb not null default '{}'::jsonb,
+  weapons text not null default '',
+  possessions text not null default '',
+  background jsonb not null default '{}'::jsonb,
+  sanity_current integer not null default 50,
+  hit_points_current integer not null default 10,
+  magic_points_current integer not null default 10,
+  is_archived boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.characters add column if not exists player_name text not null default '';
+alter table public.characters add column if not exists occupation text not null default '';
+alter table public.characters add column if not exists age text not null default '';
+alter table public.characters add column if not exists gender text not null default '';
+alter table public.characters add column if not exists residence text not null default '';
+alter table public.characters add column if not exists birthplace text not null default '';
+alter table public.characters add column if not exists characteristics jsonb not null default '{"str":10,"con":10,"siz":10,"int":10,"pow":10,"dex":10,"app":10,"edu":10}'::jsonb;
+alter table public.characters add column if not exists skills jsonb not null default '{}'::jsonb;
+alter table public.characters add column if not exists weapons text not null default '';
+alter table public.characters add column if not exists possessions text not null default '';
+alter table public.characters add column if not exists background jsonb not null default '{}'::jsonb;
+alter table public.characters add column if not exists sanity_current integer not null default 50;
+alter table public.characters add column if not exists hit_points_current integer not null default 10;
+alter table public.characters add column if not exists magic_points_current integer not null default 10;
+alter table public.characters add column if not exists is_archived boolean not null default false;
 
 create table if not exists public.scenes (
   id uuid primary key default gen_random_uuid(),
@@ -252,24 +283,68 @@ for select
 to authenticated
 using (app_private.is_room_member(room_id));
 
-create policy "Room members can insert their characters"
+create policy "Room members and staff can insert characters"
 on public.characters
 for insert
 to authenticated
-with check (app_private.is_room_member(room_id) and (owner_id is null or owner_id = (select auth.uid())));
+with check (
+  app_private.is_room_member(room_id)
+  and (
+    owner_id = (select auth.uid())
+    or exists (
+      select 1 from public.room_members member
+      where member.room_id = characters.room_id
+        and member.user_id = (select auth.uid())
+        and member.role in ('owner', 'gm')
+    )
+  )
+);
 
-create policy "Room members can update their characters"
+create policy "Character owners and room staff can update characters"
 on public.characters
 for update
 to authenticated
-using (app_private.is_room_member(room_id) and (owner_id is null or owner_id = (select auth.uid())))
-with check (app_private.is_room_member(room_id) and (owner_id is null or owner_id = (select auth.uid())));
+using (
+  app_private.is_room_member(room_id)
+  and (
+    owner_id = (select auth.uid())
+    or exists (
+      select 1 from public.room_members member
+      where member.room_id = characters.room_id
+        and member.user_id = (select auth.uid())
+        and member.role in ('owner', 'gm')
+    )
+  )
+)
+with check (
+  app_private.is_room_member(room_id)
+  and (
+    owner_id = (select auth.uid())
+    or exists (
+      select 1 from public.room_members member
+      where member.room_id = characters.room_id
+        and member.user_id = (select auth.uid())
+        and member.role in ('owner', 'gm')
+    )
+  )
+);
 
-create policy "Room members can delete their characters"
+create policy "Character owners and room staff can delete characters"
 on public.characters
 for delete
 to authenticated
-using (app_private.is_room_member(room_id) and (owner_id is null or owner_id = (select auth.uid())));
+using (
+  app_private.is_room_member(room_id)
+  and (
+    owner_id = (select auth.uid())
+    or exists (
+      select 1 from public.room_members member
+      where member.room_id = characters.room_id
+        and member.user_id = (select auth.uid())
+        and member.role in ('owner', 'gm')
+    )
+  )
+);
 
 create policy "Room members can read scenes"
 on public.scenes
@@ -340,6 +415,7 @@ create index if not exists rooms_created_by_idx on public.rooms(created_by);
 create index if not exists room_members_user_id_idx on public.room_members(user_id);
 create index if not exists characters_room_id_idx on public.characters(room_id);
 create index if not exists characters_owner_id_idx on public.characters(owner_id);
+create index if not exists characters_room_id_is_archived_idx on public.characters(room_id, is_archived);
 create index if not exists scenes_room_id_idx on public.scenes(room_id);
 create index if not exists rp_messages_room_id_created_at_idx on public.rp_messages(room_id, created_at);
 create index if not exists rp_messages_scene_id_idx on public.rp_messages(scene_id);

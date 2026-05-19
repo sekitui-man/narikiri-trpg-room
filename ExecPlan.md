@@ -26,7 +26,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Drive "login information" means access ledger fields such as email, display name, role, status, and notes. Passwords must not be stored in Drive.
 - Magic Link redirects should use `VITE_AUTH_REDIRECT_URL` when configured; otherwise they fall back to the current browser origin for local review.
 - Discord login uses Supabase Auth OAuth and remains gated by `allowed_members.email`; Discord accounts must expose an allowlisted email address.
-- External character loading is optional and uses `VITE_CHARACTER_SUPABASE_URL`, `VITE_CHARACTER_SUPABASE_ANON_KEY`, and `VITE_CHARACTER_SOURCE_TABLE`; when unavailable or blocked by RLS, room-local characters remain the fallback.
+- Characters are stored inside the `narikiri-trpg-room` Supabase project. The `characters` table supports CoC 6th edition investigator fields and per-user ownership; owners manage their own characters, while room `owner`/`gm` members can manage room characters.
 
 ## Success Criteria
 - `npm run build` succeeds.
@@ -34,4 +34,4 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Supabase schema SQL is present and RLS is enabled on public tables.
 - Documentation explains how to configure allowed users.
 - Cloudflare Pages project exists and has Supabase public env vars configured.
-- Supabase schema is applied to the new project and advisors have no security lints.
+- Supabase schema is applied to the new project; RLS/schema advisors pass, with Auth setting warnings tracked separately.

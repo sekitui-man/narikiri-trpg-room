@@ -1,10 +1,51 @@
+export type CoCCharacteristics = {
+  str: number;
+  con: number;
+  siz: number;
+  int: number;
+  pow: number;
+  dex: number;
+  app: number;
+  edu: number;
+};
+
+export type CoCSkillMap = Record<string, number>;
+
+export type CoCBackground = {
+  description: string;
+  ideology: string;
+  significantPeople: string;
+  meaningfulLocations: string;
+  treasuredPossessions: string;
+  traits: string;
+  injuries: string;
+  phobias: string;
+  tomes: string;
+  encounters: string;
+};
+
 export type Character = {
   id: string;
   name: string;
+  ownerId: string | null;
   player: string;
   archetype: string;
   color: string;
   memo: string;
+  occupation: string;
+  age: string;
+  gender: string;
+  residence: string;
+  birthplace: string;
+  characteristics: CoCCharacteristics;
+  skills: CoCSkillMap;
+  weapons: string;
+  possessions: string;
+  background: CoCBackground;
+  sanityCurrent: number;
+  hitPointsCurrent: number;
+  magicPointsCurrent: number;
+  isArchived: boolean;
 };
 
 export type Scene = {

@@ -38,6 +38,8 @@ on conflict (email) do update
 5. Add rows to `profiles`, `rooms`, and `room_members` for users who should access a room.
 6. Put the project URL and public key in `.env`.
 
+Characters are stored in `public.characters` inside this project. Each character has an `owner_id`; that user can manage their own investigator, and room `owner`/`gm` members can manage room characters. CoC 6th edition fields are represented as core profile columns plus JSON fields for characteristics, skills, and background details.
+
 ## Access Model
 
 - A user must be authenticated.
@@ -65,9 +67,6 @@ Environment variables:
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 VITE_AUTH_REDIRECT_URL
-VITE_CHARACTER_SUPABASE_URL
-VITE_CHARACTER_SUPABASE_ANON_KEY
-VITE_CHARACTER_SOURCE_TABLE
 ```
 
 Set `VITE_AUTH_REDIRECT_URL` to the canonical deployed URL, for example `https://narikiri-trpg-room.pages.dev`, so Magic Links generated from a local session do not redirect back to localhost. After deployment, add the deployed URL to Supabase Auth redirect URLs.
@@ -80,8 +79,6 @@ To enable Discord login, configure the Discord provider in Supabase Auth. The Di
 https://ucksbyrytxsowuowooco.supabase.co/auth/v1/callback
 ```
 
-The optional character source variables point at another Supabase project. For the existing `trpg-discord-bot` project, `VITE_CHARACTER_SUPABASE_URL` is `https://nqwqzpfimsweerpdsiee.supabase.co`. `VITE_CHARACTER_SOURCE_TABLE` defaults to `scenario_plans` and expects a `participants` JSON column. If the source project does not expose readable rows to its publishable/anon key, the app falls back to room-local characters.
-
 Current alpha deployment resources:
 
 - Cloudflare Pages project: `narikiri-trpg-room`
@@ -93,6 +90,6 @@ Current alpha deployment resources:
 ## Security Checks
 
 - `npm audit --audit-level=moderate`: no vulnerabilities.
-- Supabase security advisor: no lints.
+- Supabase security advisor: RLS/schema checks pass; current Auth warning is leaked password protection being disabled.
 - Secret scan: no service-role or secret key committed.
 - Remaining Supabase performance notices are unused-index info notices on a fresh database.
