@@ -66,6 +66,7 @@ export type Scene = {
 export type RpMessage = {
   id: string;
   characterId: string | null;
+  authorId: string | null;
   author: string;
   body: string;
   mode: 'ic' | 'ooc';

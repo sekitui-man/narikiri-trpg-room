@@ -1,12 +1,14 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, MouseEvent } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   Archive,
   BookOpen,
+  Check,
   ClipboardCopy,
   DoorOpen,
+  Pencil,
   Lock,
   LogOut,
   Mail,
@@ -19,9 +21,11 @@ import {
   Save,
   Send,
   ShieldCheck,
+  Trash2,
   Upload,
   UsersRound,
   UserRound,
+  X,
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from './supabase';
 import {
@@ -46,8 +50,13 @@ type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
 type ViewMode = 'room' | 'my-page' | 'tools';
 type LogFormat = 'chat' | 'script' | 'markdown';
+type SceneMapRecord = {
+  sceneId: string;
+  imageUrl: string;
+};
 type MapPinRecord = {
   id: string;
+  sceneId: string;
   x: number;
   y: number;
   label: string;
@@ -86,6 +95,7 @@ const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
   { key: 'encounters', label: '遭遇した神話存在' },
 ];
 const skillCategories = getSkillCategories();
+const demoUserId = 'demo-user';
 
 const defaultCharacteristics: CoCCharacteristics = {
   str: 10,
@@ -129,8 +139,11 @@ export function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('room');
   const [mode, setMode] = useState<'ic' | 'ooc'>('ic');
   const [draft, setDraft] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageDraft, setEditingMessageDraft] = useState('');
   const [characterDraft, setCharacterDraft] = useState<Character>(demoCharacters[0]);
-  const [mapImageUrl, setMapImageUrl] = useState('');
+  const [sceneMaps, setSceneMaps] = useState<SceneMapRecord[]>([]);
+  const sceneMapsRef = useRef<SceneMapRecord[]>([]);
   const [mapPins, setMapPins] = useState<MapPinRecord[]>([]);
   const [mapPinLabel, setMapPinLabel] = useState('');
   const [selectedMapPinId, setSelectedMapPinId] = useState<string | null>(null);
@@ -162,8 +175,12 @@ export function App() {
 
   const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
   const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
+  const activeActorId = currentUserId ?? (authState === 'demo' ? demoUserId : null);
+  const activeSceneMap = sceneMaps.find((sceneMap) => sceneMap.sceneId === selectedSceneId) ?? null;
+  const activeScenePins = mapPins.filter((pin) => pin.sceneId === selectedSceneId);
   const activeDerived = deriveCoCValues(characterDraft);
-  const selectedMapPin = mapPins.find((pin) => pin.id === selectedMapPinId) ?? mapPins[mapPins.length - 1] ?? null;
+  const selectedMapPin =
+    activeScenePins.find((pin) => pin.id === selectedMapPinId) ?? activeScenePins[activeScenePins.length - 1] ?? null;
   const canManageActiveCharacter =
     authState === 'demo' ||
     characterDraft.ownerId === currentUserId ||
@@ -189,10 +206,20 @@ export function App() {
   }, [activeCharacter?.id]);
 
   useEffect(() => {
+    sceneMapsRef.current = sceneMaps;
+  }, [sceneMaps]);
+
+  useEffect(() => {
     return () => {
-      if (mapImageUrl.startsWith('blob:')) URL.revokeObjectURL(mapImageUrl);
+      sceneMapsRef.current.forEach((sceneMap) => {
+        if (sceneMap.imageUrl.startsWith('blob:')) URL.revokeObjectURL(sceneMap.imageUrl);
+      });
     };
-  }, [mapImageUrl]);
+  }, []);
+
+  useEffect(() => {
+    setSelectedMapPinId(null);
+  }, [selectedSceneId]);
 
   async function handleAuthenticatedUser(user: User | null) {
     if (!user) {
@@ -395,7 +422,7 @@ export function App() {
       }),
       supabase
         .from('rp_messages')
-        .select('id, character_id, mode, body, created_at, profiles(display_name), characters(name)')
+        .select('id, character_id, author_id, mode, body, created_at, profiles(display_name), characters(name)')
         .eq('room_id', firstRoom.id)
         .order('created_at', { ascending: true })
         .limit(100),
@@ -421,6 +448,7 @@ export function App() {
           return {
             id: message.id,
             characterId: message.character_id,
+            authorId: message.author_id,
             author: characterRelation?.name ?? profileRelation?.display_name ?? 'Unknown',
             mode: message.mode,
             body: message.body,
@@ -517,6 +545,7 @@ export function App() {
       const remoteMessage: RpMessage = {
         id: data.id,
         characterId: mode === 'ic' ? activeCharacter.id : null,
+        authorId: currentUserId,
         author: mode === 'ic' ? activeCharacter.name : 'OOC',
         mode,
         body: trimmed,
@@ -533,6 +562,7 @@ export function App() {
     const nextMessage: RpMessage = {
       id: crypto.randomUUID(),
       characterId: mode === 'ic' ? activeCharacter.id : null,
+      authorId: activeActorId,
       author: mode === 'ic' ? activeCharacter.name : 'OOC',
       mode,
       body: trimmed,
@@ -541,6 +571,67 @@ export function App() {
 
     setMessages((current) => [...current, nextMessage]);
     setDraft('');
+  }
+
+  function startEditMessage(message: RpMessage) {
+    if (!canManageMessage(message)) return;
+    setEditingMessageId(message.id);
+    setEditingMessageDraft(message.body);
+  }
+
+  function cancelEditMessage() {
+    setEditingMessageId(null);
+    setEditingMessageDraft('');
+  }
+
+  async function saveEditedMessage(message: RpMessage) {
+    if (!canManageMessage(message)) return;
+    const trimmed = editingMessageDraft.trim();
+    if (!trimmed) return;
+
+    if (supabase && authState === 'allowed' && currentUserId) {
+      const { error } = await supabase
+        .from('rp_messages')
+        .update({ body: trimmed })
+        .eq('id', message.id)
+        .eq('author_id', currentUserId);
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+    }
+
+    setMessages((current) =>
+      current.map((currentMessage) =>
+        currentMessage.id === message.id ? { ...currentMessage, body: trimmed } : currentMessage,
+      ),
+    );
+    cancelEditMessage();
+  }
+
+  async function deleteMessage(message: RpMessage) {
+    if (!canManageMessage(message)) return;
+
+    if (supabase && authState === 'allowed' && currentUserId) {
+      const { error } = await supabase
+        .from('rp_messages')
+        .delete()
+        .eq('id', message.id)
+        .eq('author_id', currentUserId);
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+    }
+
+    setMessages((current) => current.filter((currentMessage) => currentMessage.id !== message.id));
+    if (editingMessageId === message.id) cancelEditMessage();
+  }
+
+  function canManageMessage(message: RpMessage) {
+    return Boolean(activeActorId && message.authorId === activeActorId);
   }
 
   async function handleCreateCharacter() {
@@ -594,17 +685,23 @@ export function App() {
     if (!file || !file.type.startsWith('image/')) return;
 
     const nextUrl = URL.createObjectURL(file);
-    setMapImageUrl(nextUrl);
-    setMapPins([]);
+    if (activeSceneMap?.imageUrl.startsWith('blob:')) URL.revokeObjectURL(activeSceneMap.imageUrl);
+    setSceneMaps((current) => [
+      ...current.filter((sceneMap) => sceneMap.sceneId !== selectedSceneId),
+      { sceneId: selectedSceneId, imageUrl: nextUrl },
+    ]);
+    setMapPins((current) => current.filter((pin) => pin.sceneId !== selectedSceneId));
     setSelectedMapPinId(null);
+    event.target.value = '';
   }
 
   function handleMapClick(event: MouseEvent<HTMLDivElement>) {
-    if (!mapImageUrl) return;
+    if (!activeSceneMap) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
     const nextPin: MapPinRecord = {
       id: crypto.randomUUID(),
+      sceneId: selectedSceneId,
       x: ((event.clientX - rect.left) / rect.width) * 100,
       y: ((event.clientY - rect.top) / rect.height) * 100,
       label: mapPinLabel.trim() || `${activeScene.title} / ${activeCharacter.name}`,
@@ -835,6 +932,16 @@ export function App() {
               </div>
               <div className="field-grid two">
                 <label>
+                  対応シーン
+                  <select value={selectedSceneId} onChange={(event) => setSelectedSceneId(event.target.value)}>
+                    {scenes.map((scene) => (
+                      <option key={scene.id} value={scene.id}>
+                        {scene.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
                   地点名
                   <input
                     value={mapPinLabel}
@@ -843,12 +950,12 @@ export function App() {
                   />
                 </label>
                 <label>
-                  現在の場面
+                  現在の発言者
                   <input value={`${activeScene.title} / ${activeCharacter.name}`} readOnly />
                 </label>
               </div>
               <div
-                className={mapImageUrl ? 'map-canvas has-image' : 'map-canvas'}
+                className={activeSceneMap ? 'map-canvas has-image' : 'map-canvas'}
                 role="button"
                 tabIndex={0}
                 onClick={handleMapClick}
@@ -856,10 +963,10 @@ export function App() {
                   if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
                 }}
               >
-                {mapImageUrl ? (
+                {activeSceneMap ? (
                   <>
-                    <img src={mapImageUrl} alt="アップロードしたマップ" />
-                    {mapPins.map((pin) => (
+                    <img src={activeSceneMap.imageUrl} alt={`${activeScene.title}のマップ`} />
+                    {activeScenePins.map((pin) => (
                       <button
                         className={pin.id === selectedMapPin?.id ? 'map-pin active' : 'map-pin'}
                         key={pin.id}
@@ -989,9 +1096,51 @@ export function App() {
               <article className={message.mode === 'ooc' ? 'message ooc' : 'message'} key={message.id}>
                 <div className="message-meta">
                   <span>{message.author}</span>
-                  <small>{message.mode.toUpperCase()} / {message.createdAt}</small>
+                  <div className="message-meta-actions">
+                    <small>{message.mode.toUpperCase()} / {message.createdAt}</small>
+                    {canManageMessage(message) && (
+                      <span className="message-actions">
+                        <button
+                          className="mini-icon-button"
+                          type="button"
+                          onClick={() => startEditMessage(message)}
+                          aria-label="発言を編集"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="mini-icon-button"
+                          type="button"
+                          onClick={() => deleteMessage(message)}
+                          aria-label="発言を削除"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <p>{message.body}</p>
+                {editingMessageId === message.id ? (
+                  <div className="message-editor">
+                    <textarea
+                      value={editingMessageDraft}
+                      onChange={(event) => setEditingMessageDraft(event.target.value)}
+                      rows={3}
+                    />
+                    <div className="editor-actions compact">
+                      <button className="button-primary" type="button" onClick={() => saveEditedMessage(message)}>
+                        <Check size={16} />
+                        保存
+                      </button>
+                      <button className="button-secondary" type="button" onClick={cancelEditMessage}>
+                        <X size={16} />
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p>{message.body}</p>
+                )}
               </article>
             ))}
           </div>
@@ -1007,14 +1156,25 @@ export function App() {
                 ))}
               </select>
               <div className="segmented" aria-label="投稿モード">
-                <button className={mode === 'ic' ? 'active' : ''} type="button" onClick={() => setMode('ic')}>
+                <button
+                  className={mode === 'ic' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setMode('ic')}
+                  title="In Character: キャラクターとしての発言"
+                >
                   IC
                 </button>
-                <button className={mode === 'ooc' ? 'active' : ''} type="button" onClick={() => setMode('ooc')}>
+                <button
+                  className={mode === 'ooc' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setMode('ooc')}
+                  title="Out Of Character: プレイヤーとしての相談・確認"
+                >
                   OOC
                 </button>
               </div>
             </div>
+            <p className="mode-help">ICはキャラクター発言、OOCはプレイヤー同士の相談です。</p>
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -1041,6 +1201,21 @@ export function App() {
               <li>未解決: 黒い封蝋の手紙</li>
               <li>次の焦点: 奥の扉</li>
             </ul>
+          </section>
+          <section className="memo-block">
+            <h2>Scene Map</h2>
+            {activeSceneMap ? (
+              <div className="scene-map-preview">
+                <img src={activeSceneMap.imageUrl} alt={`${activeScene.title}のマップ`} />
+                <span>{activeScenePins.length} pins</span>
+              </div>
+            ) : (
+              <p>このシーンにはまだマップがありません。</p>
+            )}
+            <button className="button-secondary rail-action" type="button" onClick={() => setCurrentView('tools')}>
+              <Map size={16} />
+              マップを設定
+            </button>
           </section>
         </aside>
       </div>

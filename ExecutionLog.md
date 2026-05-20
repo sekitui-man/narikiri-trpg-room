@@ -27,3 +27,4 @@
 - Selected the Cloudflare Pages Functions split for character CRUD: strict validation, no service-role key, JWT passthrough to Supabase RLS, and logical archive only.
 - Moved character creation/editing out of the room memo panel into a My Page character manager with character list and new-character flow.
 - Replaced free-form skill entry with a fixed CoC 6th edition skill table and added client-side map annotation plus log formatting tools.
+- Linked local maps to scenes, added author-only message edit/delete controls, and documented IC/OOC meaning in the composer.

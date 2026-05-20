@@ -119,6 +119,7 @@ export const demoMessages: RpMessage[] = [
   {
     id: 'm1',
     characterId: 'gm',
+    authorId: 'demo-gm',
     author: '語り手',
     mode: 'ic',
     body: '雨は弱まらない。窓の外で馬車の車輪が軋み、店主は無言で奥の扉を指した。',
@@ -127,6 +128,7 @@ export const demoMessages: RpMessage[] = [
   {
     id: 'm2',
     characterId: 'ren',
+    authorId: 'demo-user',
     author: '蓮',
     mode: 'ic',
     body: '「こんな時間に客を残す店じゃない。奥にいるのは、俺たちを待ってた奴か？」',
@@ -135,6 +137,7 @@ export const demoMessages: RpMessage[] = [
   {
     id: 'm3',
     characterId: 'mira',
+    authorId: 'demo-guest',
     author: 'ミラ',
     mode: 'ic',
     body: '「星の位置が変です。ここで会うべき相手は、たぶん一人ではありません」',
@@ -143,6 +146,7 @@ export const demoMessages: RpMessage[] = [
   {
     id: 'm4',
     characterId: null,
+    authorId: 'demo-user',
     author: 'Hinata',
     mode: 'ooc',
     body: '次の返答で奥の扉を開ける流れにして大丈夫です。',

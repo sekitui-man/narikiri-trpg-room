@@ -206,7 +206,7 @@ grant select, insert, update on public.rooms to authenticated;
 grant select, insert, update, delete on public.room_members to authenticated;
 grant select, insert, update, delete on public.characters to authenticated;
 grant select, insert, update, delete on public.scenes to authenticated;
-grant select, insert on public.rp_messages to authenticated;
+grant select, insert, update, delete on public.rp_messages to authenticated;
 
 create policy "Allowed users can confirm their own allowlist entry"
 on public.allowed_members
@@ -475,6 +475,21 @@ on public.rp_messages
 for insert
 to authenticated
 with check (app_private.is_room_member(room_id) and author_id = (select auth.uid()));
+
+drop policy if exists "Message authors can update their own messages" on public.rp_messages;
+create policy "Message authors can update their own messages"
+on public.rp_messages
+for update
+to authenticated
+using (app_private.is_room_member(room_id) and author_id = (select auth.uid()))
+with check (app_private.is_room_member(room_id) and author_id = (select auth.uid()));
+
+drop policy if exists "Message authors can delete their own messages" on public.rp_messages;
+create policy "Message authors can delete their own messages"
+on public.rp_messages
+for delete
+to authenticated
+using (app_private.is_room_member(room_id) and author_id = (select auth.uid()));
 
 create index if not exists rooms_created_by_idx on public.rooms(created_by);
 create index if not exists room_members_user_id_idx on public.room_members(user_id);
