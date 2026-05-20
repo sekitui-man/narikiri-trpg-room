@@ -1,4 +1,5 @@
 import type { Character, RpMessage, Scene } from './types';
+import { createSkillMap } from './cocSkills';
 
 const demoStats = {
   str: 10,
@@ -39,7 +40,7 @@ export const demoCharacters: Character[] = [
     residence: '東京',
     birthplace: '横浜',
     characteristics: demoStats,
-    skills: { 目星: 65, 聞き耳: 55, 図書館: 60, 心理学: 45, 説得: 50 },
+    skills: createSkillMap(demoStats, { 目星: 65, 聞き耳: 55, 図書館: 60, 心理学: 45, 説得: 50 }),
     weapons: 'こぶし 50%, 拳銃 40%',
     possessions: '手帳、万年筆、古い鍵',
     background: demoBackground,
@@ -62,7 +63,10 @@ export const demoCharacters: Character[] = [
     residence: '京都',
     birthplace: '長崎',
     characteristics: { ...demoStats, int: 16, edu: 17, pow: 14 },
-    skills: { 目星: 55, 図書館: 75, 歴史: 65, オカルト: 70, ラテン語: 45 },
+    skills: createSkillMap(
+      { ...demoStats, int: 16, edu: 17, pow: 14 },
+      { 目星: 55, 図書館: 75, 歴史: 65, オカルト: 70, ほかの言語: 45 },
+    ),
     weapons: '杖 35%',
     possessions: '星図、古書、白手袋',
     background: demoBackground,
@@ -85,7 +89,7 @@ export const demoCharacters: Character[] = [
     residence: '',
     birthplace: '',
     characteristics: demoStats,
-    skills: {},
+    skills: createSkillMap(demoStats),
     weapons: '',
     possessions: '',
     background: demoBackground,

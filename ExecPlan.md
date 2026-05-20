@@ -31,6 +31,8 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Character deletion is logical only: archive requests set `is_archived = true`; no physical delete API is exposed.
 - Pages Functions must strictly validate character payload fields, types, string lengths, and numeric ranges. Client-supplied `room_id`, `owner_id`, `is_archived`, and timestamps are not trusted.
 - Character creation and editing belong in My Page, with a character list followed by a sheet editor. The room view only selects existing characters for posting and keeps the right panel for scene memo content.
+- CoC 6th edition skills are edited from a fixed skill list with base, occupation, interest, growth, other, and total columns. Free-form skill text areas are not used.
+- Alpha world-support tools are client-side only: uploaded map images and pins are local to the browser session, while log formatting derives from visible room messages without changing stored message data.
 
 ## Success Criteria
 - `npm run build` succeeds.

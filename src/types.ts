@@ -9,7 +9,15 @@ export type CoCCharacteristics = {
   edu: number;
 };
 
-export type CoCSkillMap = Record<string, number>;
+export type CoCSkillEntry = {
+  base: number;
+  occupation: number;
+  interest: number;
+  growth: number;
+  other: number;
+};
+
+export type CoCSkillMap = Record<string, CoCSkillEntry>;
 
 export type CoCBackground = {
   description: string;

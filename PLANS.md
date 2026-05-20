@@ -19,6 +19,7 @@
 - Character selection and IC/OOC posting mode.
 - Scene memo panel and My Page character management.
 - Internal CoC 6th edition investigator database with per-user character ownership.
+- World support tools for local map image annotation and session log formatting.
 - Cloudflare Pages Functions boundary for character CRUD.
 - Supabase SQL schema with RLS policies for invited room members.
 

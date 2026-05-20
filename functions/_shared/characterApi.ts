@@ -207,12 +207,22 @@ function sanitizeCharacteristics(value: unknown) {
 
 function sanitizeSkills(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const output: Record<string, number> = {};
-  for (const [rawName, rawScore] of Object.entries(value as Record<string, unknown>)) {
+  const output: Record<string, number | Record<string, number>> = {};
+  for (const [rawName, rawSkill] of Object.entries(value as Record<string, unknown>)) {
     const name = rawName.trim();
     if (!name || name.length > 60) continue;
-    const score = int(rawScore, 0, 999, 0);
-    output[name] = score;
+    if (rawSkill && typeof rawSkill === 'object' && !Array.isArray(rawSkill)) {
+      const entry = rawSkill as Record<string, unknown>;
+      output[name] = {
+        base: int(entry.base, 0, 999, 0),
+        occupation: int(entry.occupation, 0, 999, 0),
+        interest: int(entry.interest, 0, 999, 0),
+        growth: int(entry.growth, 0, 999, 0),
+        other: int(entry.other, 0, 999, 0),
+      };
+      continue;
+    }
+    output[name] = int(rawSkill, 0, 999, 0);
   }
   return output;
 }

@@ -1,13 +1,17 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { ChangeEvent, MouseEvent } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   Archive,
   BookOpen,
+  ClipboardCopy,
   DoorOpen,
   Lock,
   LogOut,
   Mail,
+  Map,
+  MapPin,
   MessageCircle,
   MessageSquareText,
   PanelRight,
@@ -15,10 +19,19 @@ import {
   Save,
   Send,
   ShieldCheck,
+  Upload,
   UsersRound,
   UserRound,
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from './supabase';
+import {
+  cocSkillDefinitions,
+  createSkillMap,
+  getSkillCategories,
+  getSkillTotal,
+  normalizeSkillEntry,
+  resolveSkillBase,
+} from './cocSkills';
 import {
   archiveCharacterApi,
   createCharacterApi,
@@ -27,10 +40,21 @@ import {
   type CharacterRow,
 } from './characterApi';
 import { demoCharacters, demoMessages, demoScenes } from './demoData';
-import type { Character, CoCBackground, CoCCharacteristics, CoCSkillMap, RpMessage, Scene } from './types';
+import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSkillMap, RpMessage, Scene } from './types';
 
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
+type ViewMode = 'room' | 'my-page' | 'tools';
+type LogFormat = 'chat' | 'script' | 'markdown';
+type MapPinRecord = {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+  characterName: string;
+  sceneTitle: string;
+  createdAt: string;
+};
 type AllowedMember = {
   email?: string | null;
   discordUserId?: string | null;
@@ -61,6 +85,7 @@ const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
   { key: 'tomes', label: '魔導書・呪文' },
   { key: 'encounters', label: '遭遇した神話存在' },
 ];
+const skillCategories = getSkillCategories();
 
 const defaultCharacteristics: CoCCharacteristics = {
   str: 10,
@@ -101,11 +126,15 @@ export function App() {
   const [selectedCharacterId, setSelectedCharacterId] = useState(characters[0].id);
   const [selectedSceneId, setSelectedSceneId] = useState(scenes[0].id);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'room' | 'my-page'>('room');
+  const [currentView, setCurrentView] = useState<ViewMode>('room');
   const [mode, setMode] = useState<'ic' | 'ooc'>('ic');
   const [draft, setDraft] = useState('');
   const [characterDraft, setCharacterDraft] = useState<Character>(demoCharacters[0]);
-  const [skillDraft, setSkillDraft] = useState(formatSkills(demoCharacters[0].skills));
+  const [mapImageUrl, setMapImageUrl] = useState('');
+  const [mapPins, setMapPins] = useState<MapPinRecord[]>([]);
+  const [mapPinLabel, setMapPinLabel] = useState('');
+  const [selectedMapPinId, setSelectedMapPinId] = useState<string | null>(null);
+  const [logFormat, setLogFormat] = useState<LogFormat>('chat');
 
   useEffect(() => {
     if (!supabase) return;
@@ -134,6 +163,7 @@ export function App() {
   const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
   const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
   const activeDerived = deriveCoCValues(characterDraft);
+  const selectedMapPin = mapPins.find((pin) => pin.id === selectedMapPinId) ?? mapPins[mapPins.length - 1] ?? null;
   const canManageActiveCharacter =
     authState === 'demo' ||
     characterDraft.ownerId === currentUserId ||
@@ -148,12 +178,21 @@ export function App() {
       })),
     [characters, messages],
   );
+  const formattedLog = useMemo(
+    () => formatLog(groupedMessages, logFormat),
+    [groupedMessages, logFormat],
+  );
 
   useEffect(() => {
     if (!activeCharacter) return;
     setCharacterDraft(activeCharacter);
-    setSkillDraft(formatSkills(activeCharacter.skills));
   }, [activeCharacter?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (mapImageUrl.startsWith('blob:')) URL.revokeObjectURL(mapImageUrl);
+    };
+  }, [mapImageUrl]);
 
   async function handleAuthenticatedUser(user: User | null) {
     if (!user) {
@@ -290,7 +329,7 @@ export function App() {
           residence: '東京',
           birthplace: '横浜',
           characteristics: defaultCharacteristics,
-          skills: { 目星: 65, 聞き耳: 55, 図書館: 60, 心理学: 45, 説得: 50 },
+          skills: createSkillMap(defaultCharacteristics, { 目星: 65, 聞き耳: 55, 図書館: 60, 心理学: 45, 説得: 50 }),
           weapons: 'こぶし 50%, 拳銃 40%',
           possessions: '手帳、万年筆、古い鍵',
           background: defaultBackground,
@@ -308,7 +347,7 @@ export function App() {
           memo: '場面描写、NPC、判定結果を担当する。',
           occupation: 'NPC',
           characteristics: defaultCharacteristics,
-          skills: {},
+          skills: createSkillMap(defaultCharacteristics),
           background: defaultBackground,
         },
       ]),
@@ -528,8 +567,7 @@ export function App() {
 
   async function handleSaveCharacter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsedSkills = parseSkills(skillDraft);
-    const nextCharacter = normalizeCharacter({ ...characterDraft, skills: parsedSkills });
+    const nextCharacter = normalizeCharacter(characterDraft);
 
     if (supabase && authState === 'allowed' && selectedRoomId) {
       try {
@@ -537,7 +575,6 @@ export function App() {
         const saved = rowToCharacter(data);
         setCharacters((current) => current.map((character) => (character.id === saved.id ? saved : character)));
         setCharacterDraft(saved);
-        setSkillDraft(formatSkills(saved.skills));
         setAuthMessage('探索者を保存しました。');
         return;
       } catch (error) {
@@ -550,7 +587,48 @@ export function App() {
       current.map((character) => (character.id === nextCharacter.id ? nextCharacter : character)),
     );
     setCharacterDraft(nextCharacter);
-    setSkillDraft(formatSkills(nextCharacter.skills));
+  }
+
+  function handleMapUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const nextUrl = URL.createObjectURL(file);
+    setMapImageUrl(nextUrl);
+    setMapPins([]);
+    setSelectedMapPinId(null);
+  }
+
+  function handleMapClick(event: MouseEvent<HTMLDivElement>) {
+    if (!mapImageUrl) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const nextPin: MapPinRecord = {
+      id: crypto.randomUUID(),
+      x: ((event.clientX - rect.left) / rect.width) * 100,
+      y: ((event.clientY - rect.top) / rect.height) * 100,
+      label: mapPinLabel.trim() || `${activeScene.title} / ${activeCharacter.name}`,
+      characterName: activeCharacter.name,
+      sceneTitle: activeScene.title,
+      createdAt: new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date()),
+    };
+    setMapPins((current) => [...current, nextPin]);
+    setSelectedMapPinId(nextPin.id);
+    setMapPinLabel('');
+  }
+
+  function handleUseMapPin(pin: MapPinRecord) {
+    setDraft((current) => `${current ? `${current}\n` : ''}@${pin.label} `);
+    setCurrentView('room');
+  }
+
+  async function handleCopyLog() {
+    try {
+      await navigator.clipboard.writeText(formattedLog);
+      setAuthMessage('整形ログをコピーしました。');
+    } catch {
+      setAuthMessage('クリップボードへコピーできませんでした。');
+    }
   }
 
   async function handleArchiveCharacter() {
@@ -671,6 +749,14 @@ export function App() {
               <UserRound size={16} />
               マイページ
             </button>
+            <button
+              className={currentView === 'tools' ? 'topbar-tab active' : 'topbar-tab'}
+              type="button"
+              onClick={() => setCurrentView('tools')}
+            >
+              <Map size={16} />
+              補助
+            </button>
           </div>
           <button className="icon-button" type="button" aria-label="ログアウト" onClick={handleSignOut}>
             <LogOut size={18} />
@@ -722,9 +808,120 @@ export function App() {
               onArchive={handleArchiveCharacter}
               onSave={handleSaveCharacter}
               setCharacterDraft={setCharacterDraft}
-              setSkillDraft={setSkillDraft}
-              skillDraft={skillDraft}
             />
+          </div>
+        </section>
+      ) : currentView === 'tools' ? (
+        <section className="tools-page" aria-label="世界観補助">
+          <div className="my-page-header">
+            <div>
+              <p>World Support</p>
+              <h1>世界観補助</h1>
+            </div>
+          </div>
+
+          <div className="tools-grid">
+            <section className="tool-panel" aria-label="マップ作成">
+              <div className="tool-panel-header">
+                <div>
+                  <p>Map Board</p>
+                  <h2>マップ作成</h2>
+                </div>
+                <label className="button-secondary upload-button">
+                  <Upload size={16} />
+                  画像アップロード
+                  <input type="file" accept="image/*" onChange={handleMapUpload} />
+                </label>
+              </div>
+              <div className="field-grid two">
+                <label>
+                  地点名
+                  <input
+                    value={mapPinLabel}
+                    onChange={(event) => setMapPinLabel(event.target.value)}
+                    placeholder="奥の扉前"
+                  />
+                </label>
+                <label>
+                  現在の場面
+                  <input value={`${activeScene.title} / ${activeCharacter.name}`} readOnly />
+                </label>
+              </div>
+              <div
+                className={mapImageUrl ? 'map-canvas has-image' : 'map-canvas'}
+                role="button"
+                tabIndex={0}
+                onClick={handleMapClick}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
+                }}
+              >
+                {mapImageUrl ? (
+                  <>
+                    <img src={mapImageUrl} alt="アップロードしたマップ" />
+                    {mapPins.map((pin) => (
+                      <button
+                        className={pin.id === selectedMapPin?.id ? 'map-pin active' : 'map-pin'}
+                        key={pin.id}
+                        type="button"
+                        style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedMapPinId(pin.id);
+                        }}
+                        aria-label={pin.label}
+                      >
+                        <MapPin size={15} />
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <div className="empty-map">
+                    <Map size={32} />
+                    <span>マップ未設定</span>
+                  </div>
+                )}
+              </div>
+              {selectedMapPin && (
+                <div className="pin-detail">
+                  <div>
+                    <strong>{selectedMapPin.label}</strong>
+                    <span>
+                      {selectedMapPin.sceneTitle} / {selectedMapPin.characterName} / {selectedMapPin.createdAt}
+                    </span>
+                  </div>
+                  <button className="button-secondary" type="button" onClick={() => handleUseMapPin(selectedMapPin)}>
+                    <MessageSquareText size={16} />
+                    この地点で話す
+                  </button>
+                </div>
+              )}
+            </section>
+
+            <section className="tool-panel" aria-label="ログ整形">
+              <div className="tool-panel-header">
+                <div>
+                  <p>Session Log</p>
+                  <h2>ログ整形</h2>
+                </div>
+                <button className="button-secondary" type="button" onClick={handleCopyLog}>
+                  <ClipboardCopy size={16} />
+                  コピー
+                </button>
+              </div>
+              <div className="segmented segmented-wide" aria-label="ログ形式">
+                <button className={logFormat === 'chat' ? 'active' : ''} type="button" onClick={() => setLogFormat('chat')}>
+                  Chat
+                </button>
+                <button className={logFormat === 'script' ? 'active' : ''} type="button" onClick={() => setLogFormat('script')}>
+                  Script
+                </button>
+                <button className={logFormat === 'markdown' ? 'active' : ''} type="button" onClick={() => setLogFormat('markdown')}>
+                  MD
+                </button>
+              </div>
+              <textarea className="log-output" value={formattedLog} readOnly />
+            </section>
           </div>
         </section>
       ) : (
@@ -860,8 +1057,6 @@ function CharacterEditor({
   onArchive,
   onSave,
   setCharacterDraft,
-  setSkillDraft,
-  skillDraft,
 }: {
   activeDerived: DerivedCoCValues;
   canManageActiveCharacter: boolean;
@@ -870,9 +1065,31 @@ function CharacterEditor({
   onArchive: () => void;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
   setCharacterDraft: Dispatch<SetStateAction<Character>>;
-  setSkillDraft: Dispatch<SetStateAction<string>>;
-  skillDraft: string;
 }) {
+  const occupationBudget = characterDraft.characteristics.edu * 20;
+  const interestBudget = characterDraft.characteristics.int * 10;
+  const occupationUsed = Object.values(characterDraft.skills).reduce((sum, skill) => sum + skill.occupation, 0);
+  const interestUsed = Object.values(characterDraft.skills).reduce((sum, skill) => sum + skill.interest, 0);
+
+  function updateSkill(name: string, field: keyof Omit<CoCSkillEntry, 'base'>, value: number) {
+    setCharacterDraft((current) => {
+      const definition = cocSkillDefinitions.find((skill) => skill.name === name);
+      const base = definition ? resolveSkillBase(definition.base, current.characteristics) : 0;
+      const currentEntry = current.skills[name] ?? normalizeSkillEntry(undefined, base);
+      return {
+        ...current,
+        skills: {
+          ...current.skills,
+          [name]: {
+            ...currentEntry,
+            base,
+            [field]: clampSkillPoint(value),
+          },
+        },
+      };
+    });
+  }
+
   return (
     <form className="character-editor character-editor-page" onSubmit={onSave}>
       <div className="editor-heading">
@@ -1028,12 +1245,52 @@ function CharacterEditor({
 
       <section className="editor-section">
         <h3>Skills</h3>
-        <textarea
-          value={skillDraft}
-          onChange={(event) => setSkillDraft(event.target.value)}
-          placeholder={'目星: 65\n聞き耳: 55\n図書館: 60'}
-          disabled={!canManageActiveCharacter}
-        />
+        <div className="point-ledger">
+          <span>職業 {occupationUsed} / {occupationBudget}</span>
+          <span>興味 {interestUsed} / {interestBudget}</span>
+        </div>
+        <div className="skill-table" role="table" aria-label="CoC 6th edition skills">
+          <div className="skill-row skill-head" role="row">
+            <span>技能</span>
+            <span>初期</span>
+            <span>職業</span>
+            <span>興味</span>
+            <span>成長</span>
+            <span>他</span>
+            <span>合計</span>
+          </div>
+          {skillCategories.map((category) => (
+            <div className="skill-category" key={category}>
+              <div className="skill-category-title">{category}</div>
+              {cocSkillDefinitions
+                .filter((definition) => definition.category === category)
+                .map((definition) => {
+                  const base = resolveSkillBase(definition.base, characterDraft.characteristics);
+                  const entry = characterDraft.skills[definition.name] ?? normalizeSkillEntry(undefined, base);
+                  const normalizedEntry = entry.base === base ? entry : { ...entry, base };
+                  return (
+                    <div className="skill-row" role="row" key={definition.name}>
+                      <span>{definition.name}</span>
+                      <span>{base}</span>
+                      {(['occupation', 'interest', 'growth', 'other'] as const).map((field) => (
+                        <input
+                          key={field}
+                          type="number"
+                          min="0"
+                          max="999"
+                          value={normalizedEntry[field]}
+                          onChange={(event) => updateSkill(definition.name, field, Number(event.target.value))}
+                          disabled={!canManageActiveCharacter}
+                          aria-label={`${definition.name} ${field}`}
+                        />
+                      ))}
+                      <strong>{getSkillTotal(normalizedEntry)}</strong>
+                    </div>
+                  );
+                })}
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="editor-section">
@@ -1162,7 +1419,7 @@ function normalizeCharacter(character: CharacterLike): Character {
       ? (character.background as Partial<CoCBackground>)
       : {};
   const characteristics = { ...defaultCharacteristics, ...characteristicsInput };
-  const skills = normalizeSkills(character.skills);
+  const skills = normalizeSkills(character.skills, characteristics);
   const sanityDefault = characteristics.pow * 5;
   const hitPointDefault = Math.ceil((characteristics.con + characteristics.siz) / 2);
 
@@ -1203,20 +1460,13 @@ function createDefaultCharacter(ownerId: string | null): Character {
     color: '#090909',
     occupation: '',
     characteristics,
-    skills: {
-      目星: 25,
-      聞き耳: 25,
-      図書館: 25,
-      回避: characteristics.dex * 2,
-      母国語: characteristics.edu * 5,
-      クトゥルフ神話: 0,
-    },
+    skills: createSkillMap(characteristics),
   });
 }
 
 function deriveCoCValues(character: Character) {
   const { con, siz, int, pow, edu } = character.characteristics;
-  const cthulhuMythos = character.skills['クトゥルフ神話'] ?? character.skills['Cthulhu Mythos'] ?? 0;
+  const cthulhuMythos = getSkillTotal(character.skills['クトゥルフ神話']);
 
   return {
     idea: int * 5,
@@ -1228,32 +1478,31 @@ function deriveCoCValues(character: Character) {
   };
 }
 
-function normalizeSkills(skills: unknown): CoCSkillMap {
-  if (!skills || typeof skills !== 'object' || Array.isArray(skills)) return {};
-
+function normalizeSkills(skills: unknown, characteristics: CoCCharacteristics): CoCSkillMap {
+  const input = skills && typeof skills === 'object' && !Array.isArray(skills) ? (skills as Record<string, unknown>) : {};
   return Object.fromEntries(
-    Object.entries(skills as Record<string, unknown>)
-      .map(([name, value]) => [name.trim(), Number(value)])
-      .filter(([name, value]) => Boolean(name) && Number.isFinite(value)),
+    cocSkillDefinitions.map((definition) => {
+      const base = resolveSkillBase(definition.base, characteristics);
+      return [definition.name, normalizeSkillEntry(input[definition.name], base)];
+    }),
   );
 }
 
-function formatSkills(skills: CoCSkillMap) {
-  return Object.entries(skills)
-    .map(([name, value]) => `${name}: ${value}`)
+function clampSkillPoint(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(999, Math.max(0, Math.trunc(value)));
+}
+
+function formatLog(messages: Array<RpMessage & { character?: Character }>, format: LogFormat) {
+  if (format === 'script') {
+    return messages.map((message) => `${message.author}: ${message.body}`).join('\n');
+  }
+  if (format === 'markdown') {
+    return messages
+      .map((message) => `- **${message.author}** (${message.mode.toUpperCase()} / ${message.createdAt})\n  ${message.body}`)
+      .join('\n');
+  }
+  return messages
+    .map((message) => `[${message.createdAt}] ${message.mode.toUpperCase()} ${message.author}: ${message.body}`)
     .join('\n');
-}
-
-function parseSkills(value: string): CoCSkillMap {
-  return Object.fromEntries(
-    value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [name, rawValue] = line.split(/[:：]/);
-        return [name.trim(), Number(rawValue)];
-      })
-      .filter(([name, score]) => Boolean(name) && Number.isFinite(score)),
-  );
 }
