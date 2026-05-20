@@ -51,6 +51,8 @@ on conflict (email) do update
 
 Characters are stored in `public.characters` inside this project. Each character has an `owner_id`; that user can manage their own investigator, and room `owner`/`gm` members can manage room characters. CoC 6th edition fields are represented as core profile columns plus JSON fields for characteristics, skills, and background details.
 
+Character CRUD runs through Cloudflare Pages Functions under `/api/characters`. The Functions require `Authorization: Bearer <Supabase access token>`, use only the Supabase URL plus anon/publishable key, and let Supabase RLS make the final authorization decision. Character removal is logical only: archive requests set `is_archived = true`.
+
 ## Access Model
 
 - A user must be authenticated.
@@ -78,7 +80,11 @@ Environment variables:
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 VITE_AUTH_REDIRECT_URL
+SUPABASE_URL
+SUPABASE_ANON_KEY
 ```
+
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` are for Pages Functions. They may match the `VITE_` values. Do not configure a service-role key for the character API.
 
 Set `VITE_AUTH_REDIRECT_URL` to the canonical deployed URL, for example `https://narikiri-trpg-room.pages.dev`, so Magic Links generated from a local session do not redirect back to localhost. After deployment, add the deployed URL to Supabase Auth redirect URLs.
 

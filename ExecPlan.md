@@ -27,10 +27,14 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Magic Link redirects should use `VITE_AUTH_REDIRECT_URL` when configured; otherwise they fall back to the current browser origin for local review.
 - Discord login uses Supabase Auth OAuth and is gated by `auth.identities.provider_id` against `public.allowed_discord_accounts`; email allowlisting remains available for email login.
 - Characters are stored inside the `narikiri-trpg-room` Supabase project. The `characters` table supports CoC 6th edition investigator fields and per-user ownership; owners manage their own characters, while room `owner`/`gm` members can manage room characters.
+- Character CRUD is served through Cloudflare Pages Functions at `/api/characters`. The Functions use only the Supabase URL plus anon/publishable key, forward the user's Bearer JWT to Supabase, and rely on RLS as the final authorization boundary.
+- Character deletion is logical only: archive requests set `is_archived = true`; no physical delete API is exposed.
+- Pages Functions must strictly validate character payload fields, types, string lengths, and numeric ranges. Client-supplied `room_id`, `owner_id`, `is_archived`, and timestamps are not trusted.
 
 ## Success Criteria
 - `npm run build` succeeds.
 - App can render locally.
+- Character CRUD routes exist under `/api/characters` and enforce authenticated Bearer tokens.
 - Supabase schema SQL is present and RLS is enabled on public tables.
 - Documentation explains how to configure allowed users.
 - Cloudflare Pages project exists and has Supabase public env vars configured.

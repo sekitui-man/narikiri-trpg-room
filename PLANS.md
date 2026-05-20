@@ -19,6 +19,7 @@
 - Character selection and IC/OOC posting mode.
 - Scene memo and character notes panel.
 - Internal CoC 6th edition investigator database with per-user character ownership.
+- Cloudflare Pages Functions boundary for character CRUD.
 - Supabase SQL schema with RLS policies for invited room members.
 
 ## Out Of Scope For Alpha
@@ -34,3 +35,4 @@
 - Every table in the public schema must have RLS enabled.
 - Authorization must not rely on user-editable metadata.
 - Room data is only visible to authenticated users who are explicitly allowed and assigned to the room.
+- Backend functions must not use Supabase service-role keys for user-scoped character CRUD.

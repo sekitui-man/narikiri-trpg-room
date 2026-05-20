@@ -17,6 +17,13 @@ import {
   UserRound,
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from './supabase';
+import {
+  archiveCharacterApi,
+  createCharacterApi,
+  fetchCharactersApi,
+  updateCharacterApi,
+  type CharacterRow,
+} from './characterApi';
 import { demoCharacters, demoMessages, demoScenes } from './demoData';
 import type { Character, CoCBackground, CoCCharacteristics, CoCSkillMap, RpMessage, Scene } from './types';
 
@@ -27,6 +34,13 @@ type AllowedMember = {
   discordUserId?: string | null;
   display_name: string;
   role: AccessRole;
+};
+type CharacterLike = Omit<Partial<Character>, 'characteristics' | 'skills' | 'background'> & {
+  id: string;
+  name?: string;
+  characteristics?: unknown;
+  skills?: unknown;
+  background?: unknown;
 };
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
@@ -326,20 +340,16 @@ export function App() {
 
     setSelectedRoomId(firstRoom.id);
 
-    const [{ data: remoteScenes }, { data: remoteCharacters }, { data: remoteMessages }] = await Promise.all([
+    const [{ data: remoteScenes }, remoteCharacters, { data: remoteMessages }] = await Promise.all([
       supabase
         .from('scenes')
         .select('id, title, status, summary')
         .eq('room_id', firstRoom.id)
         .order('created_at', { ascending: true }),
-      supabase
-        .from('characters')
-        .select(
-          'id, name, player_name, archetype, color, memo, owner_id, occupation, age, gender, residence, birthplace, characteristics, skills, weapons, possessions, background, sanity_current, hit_points_current, magic_points_current, is_archived',
-        )
-        .eq('room_id', firstRoom.id)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: true }),
+      fetchCharactersApi(firstRoom.id).catch((error) => {
+        setAuthMessage(error instanceof Error ? error.message : '探索者一覧を取得できませんでした。');
+        return [] as CharacterRow[];
+      }),
       supabase
         .from('rp_messages')
         .select('id, character_id, mode, body, created_at, profiles(display_name), characters(name)')
@@ -354,31 +364,7 @@ export function App() {
     }
 
     if (remoteCharacters?.length) {
-      const mappedCharacters = remoteCharacters.map((character) => {
-        return normalizeCharacter({
-          id: character.id,
-          name: character.name,
-          ownerId: character.owner_id,
-          player: character.player_name ?? (character.owner_id ? 'Player' : 'Shared'),
-          archetype: character.archetype,
-          color: character.color,
-          memo: character.memo,
-          occupation: character.occupation,
-          age: character.age,
-          gender: character.gender,
-          residence: character.residence,
-          birthplace: character.birthplace,
-          characteristics: character.characteristics,
-          skills: character.skills,
-          weapons: character.weapons,
-          possessions: character.possessions,
-          background: character.background,
-          sanityCurrent: character.sanity_current,
-          hitPointsCurrent: character.hit_points_current,
-          magicPointsCurrent: character.magic_points_current,
-          isArchived: character.is_archived,
-        });
-      });
+      const mappedCharacters = remoteCharacters.map(rowToCharacter);
       setCharacters(mappedCharacters);
       setSelectedCharacterId(mappedCharacters[0].id);
     }
@@ -518,46 +504,17 @@ export function App() {
     const nextCharacter = createDefaultCharacter(currentUserId);
 
     if (supabase && authState === 'allowed' && selectedRoomId && currentUserId) {
-      const { data, error } = await supabase
-        .from('characters')
-        .insert(toCharacterInsert(nextCharacter, selectedRoomId, currentUserId))
-        .select(
-          'id, name, player_name, archetype, color, memo, owner_id, occupation, age, gender, residence, birthplace, characteristics, skills, weapons, possessions, background, sanity_current, hit_points_current, magic_points_current, is_archived',
-        )
-        .single();
-
-      if (error) {
-        setAuthMessage(error.message);
+      try {
+        const data = await createCharacterApi(selectedRoomId, nextCharacter);
+        const created = rowToCharacter(data);
+        setCharacters((current) => [...current, created]);
+        setSelectedCharacterId(created.id);
+        setAuthMessage('探索者を作成しました。');
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : '探索者を作成できませんでした。');
         return;
       }
-
-      const created = normalizeCharacter({
-        id: data.id,
-        name: data.name,
-        ownerId: data.owner_id,
-        player: data.player_name,
-        archetype: data.archetype,
-        color: data.color,
-        memo: data.memo,
-        occupation: data.occupation,
-        age: data.age,
-        gender: data.gender,
-        residence: data.residence,
-        birthplace: data.birthplace,
-        characteristics: data.characteristics,
-        skills: data.skills,
-        weapons: data.weapons,
-        possessions: data.possessions,
-        background: data.background,
-        sanityCurrent: data.sanity_current,
-        hitPointsCurrent: data.hit_points_current,
-        magicPointsCurrent: data.magic_points_current,
-        isArchived: data.is_archived,
-      });
-      setCharacters((current) => [...current, created]);
-      setSelectedCharacterId(created.id);
-      setAuthMessage('探索者を作成しました。');
-      return;
     }
 
     setCharacters((current) => [...current, nextCharacter]);
@@ -570,17 +527,18 @@ export function App() {
     const nextCharacter = normalizeCharacter({ ...characterDraft, skills: parsedSkills });
 
     if (supabase && authState === 'allowed' && selectedRoomId) {
-      const { error } = await supabase
-        .from('characters')
-        .update(toCharacterUpdate(nextCharacter))
-        .eq('id', nextCharacter.id)
-        .eq('room_id', selectedRoomId);
-
-      if (error) {
-        setAuthMessage(error.message);
+      try {
+        const data = await updateCharacterApi(selectedRoomId, nextCharacter);
+        const saved = rowToCharacter(data);
+        setCharacters((current) => current.map((character) => (character.id === saved.id ? saved : character)));
+        setCharacterDraft(saved);
+        setSkillDraft(formatSkills(saved.skills));
+        setAuthMessage('探索者を保存しました。');
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : '探索者を保存できませんでした。');
         return;
       }
-      setAuthMessage('探索者を保存しました。');
     }
 
     setCharacters((current) =>
@@ -594,14 +552,10 @@ export function App() {
     if (!activeCharacter) return;
 
     if (supabase && authState === 'allowed' && selectedRoomId) {
-      const { error } = await supabase
-        .from('characters')
-        .update({ is_archived: true })
-        .eq('id', activeCharacter.id)
-        .eq('room_id', selectedRoomId);
-
-      if (error) {
-        setAuthMessage(error.message);
+      try {
+        await archiveCharacterApi(selectedRoomId, activeCharacter.id);
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : '探索者をアーカイブできませんでした。');
         return;
       }
     }
@@ -1077,8 +1031,42 @@ function getProfileKey(user: User, discordUserId: string | null) {
   return user.email ? user.email.toLowerCase() : null;
 }
 
-function normalizeCharacter(character: Partial<Character> & { id: string; name?: string }): Character {
-  const characteristics = { ...defaultCharacteristics, ...(character.characteristics ?? {}) };
+function rowToCharacter(character: CharacterRow): Character {
+  return normalizeCharacter({
+    id: character.id,
+    name: character.name,
+    ownerId: character.owner_id,
+    player: character.player_name ?? (character.owner_id ? 'Player' : 'Shared'),
+    archetype: character.archetype ?? '',
+    color: character.color ?? '#090909',
+    memo: character.memo ?? '',
+    occupation: character.occupation ?? '',
+    age: character.age ?? '',
+    gender: character.gender ?? '',
+    residence: character.residence ?? '',
+    birthplace: character.birthplace ?? '',
+    characteristics: character.characteristics,
+    skills: character.skills,
+    weapons: character.weapons ?? '',
+    possessions: character.possessions ?? '',
+    background: character.background,
+    sanityCurrent: character.sanity_current ?? undefined,
+    hitPointsCurrent: character.hit_points_current ?? undefined,
+    magicPointsCurrent: character.magic_points_current ?? undefined,
+    isArchived: character.is_archived ?? false,
+  });
+}
+
+function normalizeCharacter(character: CharacterLike): Character {
+  const characteristicsInput =
+    character.characteristics && typeof character.characteristics === 'object' && !Array.isArray(character.characteristics)
+      ? (character.characteristics as Partial<CoCCharacteristics>)
+      : {};
+  const backgroundInput =
+    character.background && typeof character.background === 'object' && !Array.isArray(character.background)
+      ? (character.background as Partial<CoCBackground>)
+      : {};
+  const characteristics = { ...defaultCharacteristics, ...characteristicsInput };
   const skills = normalizeSkills(character.skills);
   const sanityDefault = characteristics.pow * 5;
   const hitPointDefault = Math.ceil((characteristics.con + characteristics.siz) / 2);
@@ -1100,7 +1088,7 @@ function normalizeCharacter(character: Partial<Character> & { id: string; name?:
     skills,
     weapons: character.weapons ?? '',
     possessions: character.possessions ?? '',
-    background: { ...defaultBackground, ...(character.background ?? {}) },
+    background: { ...defaultBackground, ...backgroundInput },
     sanityCurrent: Number(character.sanityCurrent ?? sanityDefault),
     hitPointsCurrent: Number(character.hitPointsCurrent ?? hitPointDefault),
     magicPointsCurrent: Number(character.magicPointsCurrent ?? characteristics.pow),
@@ -1173,36 +1161,4 @@ function parseSkills(value: string): CoCSkillMap {
       })
       .filter(([name, score]) => Boolean(name) && Number.isFinite(score)),
   );
-}
-
-function toCharacterInsert(character: Character, roomId: string, ownerId: string) {
-  return {
-    ...toCharacterUpdate(character),
-    room_id: roomId,
-    owner_id: ownerId,
-  };
-}
-
-function toCharacterUpdate(character: Character) {
-  return {
-    name: character.name,
-    player_name: character.player,
-    archetype: character.occupation || character.archetype,
-    color: character.color,
-    memo: character.memo,
-    occupation: character.occupation,
-    age: character.age,
-    gender: character.gender,
-    residence: character.residence,
-    birthplace: character.birthplace,
-    characteristics: character.characteristics,
-    skills: character.skills,
-    weapons: character.weapons,
-    possessions: character.possessions,
-    background: character.background,
-    sanity_current: character.sanityCurrent,
-    hit_points_current: character.hitPointsCurrent,
-    magic_points_current: character.magicPointsCurrent,
-    is_archived: character.isArchived,
-  };
 }

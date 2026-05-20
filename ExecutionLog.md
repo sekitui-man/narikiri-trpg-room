@@ -24,3 +24,4 @@
 - Replaced external character-source plan with internal CoC 6th edition investigator fields on `public.characters`, including per-user ownership management.
 - Updated `characters` insert RLS so room `owner`/`gm` members can create shared room characters while players remain limited to their own characters.
 - Added Discord provider ID allowlisting with `public.allowed_discord_accounts` and allowed Discord ID `600301816315379723` as `owner`.
+- Selected the Cloudflare Pages Functions split for character CRUD: strict validation, no service-role key, JWT passthrough to Supabase RLS, and logical archive only.
