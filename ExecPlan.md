@@ -30,6 +30,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Character CRUD is served through Cloudflare Pages Functions at `/api/characters`. The Functions use only the Supabase URL plus anon/publishable key, forward the user's Bearer JWT to Supabase, and rely on RLS as the final authorization boundary.
 - Character deletion is logical only: archive requests set `is_archived = true`; no physical delete API is exposed.
 - Pages Functions must strictly validate character payload fields, types, string lengths, and numeric ranges. Client-supplied `room_id`, `owner_id`, `is_archived`, and timestamps are not trusted.
+- Character creation and editing belong in My Page, with a character list followed by a sheet editor. The room view only selects existing characters for posting and keeps the right panel for scene memo content.
 
 ## Success Criteria
 - `npm run build` succeeds.

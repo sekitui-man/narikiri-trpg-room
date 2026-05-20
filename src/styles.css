@@ -221,6 +221,33 @@ select:focus {
   gap: 16px;
 }
 
+.topbar-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-tab {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.topbar-tab:hover,
+.topbar-tab.active {
+  border-color: var(--border);
+  background: var(--neutral);
+}
+
 .access-chip {
   min-height: 28px;
   display: inline-flex;
@@ -249,6 +276,55 @@ select:focus {
   grid-template-columns: 280px minmax(0, 1fr) 320px;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
+}
+
+.my-page {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: 44px 32px;
+}
+
+.my-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 26px;
+  margin-bottom: 26px;
+}
+
+.my-page-header p,
+.editor-heading p {
+  margin: 0 0 6px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.my-page-header h1 {
+  margin: 0;
+  color: var(--primary);
+  font-size: clamp(32px, 5vw, 40px);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.character-manager {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+.character-manager-list {
+  position: sticky;
+  top: 26px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--surface);
 }
 
 .left-rail,
@@ -510,6 +586,10 @@ select:focus {
   background: var(--surface);
 }
 
+.character-editor-page {
+  margin-bottom: 0;
+}
+
 .editor-heading {
   display: flex;
   align-items: flex-start;
@@ -638,9 +718,31 @@ select:focus {
     padding: 12px 16px;
   }
 
+  .topbar-meta {
+    gap: 8px;
+  }
+
   .brand {
     font-size: 20px;
     line-height: 24px;
+  }
+
+  .topbar-tab {
+    width: 36px;
+    padding: 0;
+  }
+
+  .topbar-tab svg {
+    flex: 0 0 auto;
+  }
+
+  .topbar-tab {
+    font-size: 0;
+  }
+
+  .topbar-tab svg {
+    width: 17px;
+    height: 17px;
   }
 
   .access-chip {
@@ -650,6 +752,24 @@ select:focus {
   .workspace {
     grid-template-columns: 1fr;
     border: 0;
+  }
+
+  .my-page {
+    padding: 26px 16px;
+  }
+
+  .my-page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .character-manager {
+    grid-template-columns: 1fr;
+  }
+
+  .character-manager-list {
+    position: static;
   }
 
   .left-rail {

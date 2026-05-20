@@ -17,7 +17,7 @@
 - Access gated by email allowlist and Discord provider ID allowlist tables.
 - Text-based RP timeline.
 - Character selection and IC/OOC posting mode.
-- Scene memo and character notes panel.
+- Scene memo panel and My Page character management.
 - Internal CoC 6th edition investigator database with per-user character ownership.
 - Cloudflare Pages Functions boundary for character CRUD.
 - Supabase SQL schema with RLS policies for invited room members.

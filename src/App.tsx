@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   Archive,
@@ -14,6 +15,7 @@ import {
   Save,
   Send,
   ShieldCheck,
+  UsersRound,
   UserRound,
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from './supabase';
@@ -42,6 +44,7 @@ type CharacterLike = Omit<Partial<Character>, 'characteristics' | 'skills' | 'ba
   skills?: unknown;
   background?: unknown;
 };
+type DerivedCoCValues = ReturnType<typeof deriveCoCValues>;
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
 const magicLinkCooldownSeconds = 60;
@@ -98,6 +101,7 @@ export function App() {
   const [selectedCharacterId, setSelectedCharacterId] = useState(characters[0].id);
   const [selectedSceneId, setSelectedSceneId] = useState(scenes[0].id);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<'room' | 'my-page'>('room');
   const [mode, setMode] = useState<'ic' | 'ooc'>('ic');
   const [draft, setDraft] = useState('');
   const [characterDraft, setCharacterDraft] = useState<Character>(demoCharacters[0]);
@@ -502,6 +506,7 @@ export function App() {
 
   async function handleCreateCharacter() {
     const nextCharacter = createDefaultCharacter(currentUserId);
+    setCurrentView('my-page');
 
     if (supabase && authState === 'allowed' && selectedRoomId && currentUserId) {
       try {
@@ -649,12 +654,80 @@ export function App() {
             <ShieldCheck size={14} />
             {authState === 'demo' ? 'DEMO MODE' : 'INVITED ONLY'}
           </span>
+          <div className="topbar-tabs" aria-label="表示切り替え">
+            <button
+              className={currentView === 'room' ? 'topbar-tab active' : 'topbar-tab'}
+              type="button"
+              onClick={() => setCurrentView('room')}
+            >
+              <MessageSquareText size={16} />
+              ルーム
+            </button>
+            <button
+              className={currentView === 'my-page' ? 'topbar-tab active' : 'topbar-tab'}
+              type="button"
+              onClick={() => setCurrentView('my-page')}
+            >
+              <UserRound size={16} />
+              マイページ
+            </button>
+          </div>
           <button className="icon-button" type="button" aria-label="ログアウト" onClick={handleSignOut}>
             <LogOut size={18} />
           </button>
         </div>
       </header>
 
+      {currentView === 'my-page' ? (
+        <section className="my-page" aria-label="マイページ">
+          <div className="my-page-header">
+            <div>
+              <p>My Page</p>
+              <h1>キャラクター管理</h1>
+            </div>
+            <button className="button-primary" type="button" onClick={handleCreateCharacter}>
+              <Plus size={16} />
+              新規キャラ作成
+            </button>
+          </div>
+
+          <div className="character-manager">
+            <aside className="character-manager-list" aria-label="キャラ一覧">
+              <div className="section-title">
+                <UsersRound size={16} />
+                キャラ一覧
+              </div>
+              <div className="character-list">
+                {characters.map((character) => (
+                  <button
+                    className={character.id === selectedCharacterId ? 'character-item selected' : 'character-item'}
+                    key={character.id}
+                    type="button"
+                    onClick={() => setSelectedCharacterId(character.id)}
+                  >
+                    <span className="avatar" style={{ backgroundColor: character.color }} />
+                    <span>
+                      <strong>{character.name}</strong>
+                      <small>{character.archetype || '探索者'}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </aside>
+            <CharacterEditor
+              activeDerived={activeDerived}
+              canManageActiveCharacter={canManageActiveCharacter}
+              characterDraft={characterDraft}
+              currentUserId={currentUserId}
+              onArchive={handleArchiveCharacter}
+              onSave={handleSaveCharacter}
+              setCharacterDraft={setCharacterDraft}
+              setSkillDraft={setSkillDraft}
+              skillDraft={skillDraft}
+            />
+          </div>
+        </section>
+      ) : (
       <div className="workspace">
         <aside className="left-rail" aria-label="ルームナビゲーション">
           <section>
@@ -682,9 +755,9 @@ export function App() {
               <UserRound size={16} />
               Characters
             </div>
-            <button className="button-secondary rail-action" type="button" onClick={handleCreateCharacter}>
-              <Plus size={16} />
-              新規探索者
+            <button className="button-secondary rail-action" type="button" onClick={() => setCurrentView('my-page')}>
+              <UserRound size={16} />
+              マイページで管理
             </button>
             <div className="character-list">
               {characters.map((character) => (
@@ -761,232 +834,8 @@ export function App() {
         <aside className="right-panel" aria-label="メモ">
           <div className="section-title">
             <PanelRight size={16} />
-            Investigator
+            Scene Memo
           </div>
-          <form className="character-editor" onSubmit={handleSaveCharacter}>
-            <div className="editor-heading">
-              <h2>{characterDraft.name}</h2>
-              <span className="access-chip">{characterDraft.ownerId === currentUserId ? 'MY PC' : 'ROOM PC'}</span>
-            </div>
-
-            <div className="field-grid two">
-              <label>
-                名前
-                <input
-                  value={characterDraft.name}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                プレイヤー
-                <input
-                  value={characterDraft.player}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, player: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                職業
-                <input
-                  value={characterDraft.occupation}
-                  onChange={(event) =>
-                    setCharacterDraft({
-                      ...characterDraft,
-                      occupation: event.target.value,
-                      archetype: event.target.value || characterDraft.archetype,
-                    })
-                  }
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                年齢
-                <input
-                  value={characterDraft.age}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, age: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                性別
-                <input
-                  value={characterDraft.gender}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, gender: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                色
-                <input
-                  value={characterDraft.color}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, color: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                住所
-                <input
-                  value={characterDraft.residence}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, residence: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                出身
-                <input
-                  value={characterDraft.birthplace}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, birthplace: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-            </div>
-
-            <section className="editor-section">
-              <h3>Characteristics</h3>
-              <div className="stat-grid">
-                {characteristicKeys.map((key) => (
-                  <label key={key}>
-                    {key.toUpperCase()}
-                    <input
-                      type="number"
-                      min="0"
-                      max="99"
-                      value={characterDraft.characteristics[key]}
-                      onChange={(event) =>
-                        setCharacterDraft({
-                          ...characterDraft,
-                          characteristics: {
-                            ...characterDraft.characteristics,
-                            [key]: Number(event.target.value),
-                          },
-                        })
-                      }
-                      disabled={!canManageActiveCharacter}
-                    />
-                  </label>
-                ))}
-              </div>
-              <div className="derived-grid">
-                <span>Idea {activeDerived.idea}</span>
-                <span>Luck {activeDerived.luck}</span>
-                <span>Know {activeDerived.know}</span>
-                <span>SAN Max {activeDerived.sanityMax}</span>
-              </div>
-            </section>
-
-            <section className="editor-section">
-              <h3>Status</h3>
-              <div className="field-grid three">
-                <label>
-                  SAN
-                  <input
-                    type="number"
-                    value={characterDraft.sanityCurrent}
-                    onChange={(event) =>
-                      setCharacterDraft({ ...characterDraft, sanityCurrent: Number(event.target.value) })
-                    }
-                    disabled={!canManageActiveCharacter}
-                  />
-                </label>
-                <label>
-                  HP / {activeDerived.hitPointsMax}
-                  <input
-                    type="number"
-                    value={characterDraft.hitPointsCurrent}
-                    onChange={(event) =>
-                      setCharacterDraft({ ...characterDraft, hitPointsCurrent: Number(event.target.value) })
-                    }
-                    disabled={!canManageActiveCharacter}
-                  />
-                </label>
-                <label>
-                  MP / {activeDerived.magicPointsMax}
-                  <input
-                    type="number"
-                    value={characterDraft.magicPointsCurrent}
-                    onChange={(event) =>
-                      setCharacterDraft({ ...characterDraft, magicPointsCurrent: Number(event.target.value) })
-                    }
-                    disabled={!canManageActiveCharacter}
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="editor-section">
-              <h3>Skills</h3>
-              <textarea
-                value={skillDraft}
-                onChange={(event) => setSkillDraft(event.target.value)}
-                placeholder={'目星: 65\n聞き耳: 55\n図書館: 60'}
-                disabled={!canManageActiveCharacter}
-              />
-            </section>
-
-            <section className="editor-section">
-              <h3>Equipment</h3>
-              <label>
-                武器
-                <textarea
-                  value={characterDraft.weapons}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, weapons: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-              <label>
-                所持品
-                <textarea
-                  value={characterDraft.possessions}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, possessions: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-            </section>
-
-            <section className="editor-section">
-              <h3>Background</h3>
-              {backgroundFields.map((field) => (
-                <label key={field.key}>
-                  {field.label}
-                  <textarea
-                    value={characterDraft.background[field.key]}
-                    onChange={(event) =>
-                      setCharacterDraft({
-                        ...characterDraft,
-                        background: { ...characterDraft.background, [field.key]: event.target.value },
-                      })
-                    }
-                    disabled={!canManageActiveCharacter}
-                  />
-                </label>
-              ))}
-              <label>
-                メモ
-                <textarea
-                  value={characterDraft.memo}
-                  onChange={(event) => setCharacterDraft({ ...characterDraft, memo: event.target.value })}
-                  disabled={!canManageActiveCharacter}
-                />
-              </label>
-            </section>
-
-            <div className="editor-actions">
-              <button className="button-primary" type="submit" disabled={!canManageActiveCharacter}>
-                <Save size={16} />
-                保存
-              </button>
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={handleArchiveCharacter}
-                disabled={!canManageActiveCharacter}
-              >
-                <Archive size={16} />
-                アーカイブ
-              </button>
-            </div>
-          </form>
           <section className="memo-block">
             <h2>Scene Memo</h2>
             <p>{activeScene.summary}</p>
@@ -998,7 +847,253 @@ export function App() {
           </section>
         </aside>
       </div>
+      )}
     </main>
+  );
+}
+
+function CharacterEditor({
+  activeDerived,
+  canManageActiveCharacter,
+  characterDraft,
+  currentUserId,
+  onArchive,
+  onSave,
+  setCharacterDraft,
+  setSkillDraft,
+  skillDraft,
+}: {
+  activeDerived: DerivedCoCValues;
+  canManageActiveCharacter: boolean;
+  characterDraft: Character;
+  currentUserId: string | null;
+  onArchive: () => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+  setCharacterDraft: Dispatch<SetStateAction<Character>>;
+  setSkillDraft: Dispatch<SetStateAction<string>>;
+  skillDraft: string;
+}) {
+  return (
+    <form className="character-editor character-editor-page" onSubmit={onSave}>
+      <div className="editor-heading">
+        <div>
+          <p>Character Sheet</p>
+          <h2>{characterDraft.name}</h2>
+        </div>
+        <span className="access-chip">{characterDraft.ownerId === currentUserId ? 'MY PC' : 'ROOM PC'}</span>
+      </div>
+
+      <div className="field-grid two">
+        <label>
+          名前
+          <input
+            value={characterDraft.name}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          プレイヤー
+          <input
+            value={characterDraft.player}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, player: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          職業
+          <input
+            value={characterDraft.occupation}
+            onChange={(event) =>
+              setCharacterDraft({
+                ...characterDraft,
+                occupation: event.target.value,
+                archetype: event.target.value || characterDraft.archetype,
+              })
+            }
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          年齢
+          <input
+            value={characterDraft.age}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, age: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          性別
+          <input
+            value={characterDraft.gender}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, gender: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          色
+          <input
+            value={characterDraft.color}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, color: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          住所
+          <input
+            value={characterDraft.residence}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, residence: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          出身
+          <input
+            value={characterDraft.birthplace}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, birthplace: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+      </div>
+
+      <section className="editor-section">
+        <h3>Characteristics</h3>
+        <div className="stat-grid">
+          {characteristicKeys.map((key) => (
+            <label key={key}>
+              {key.toUpperCase()}
+              <input
+                type="number"
+                min="0"
+                max="99"
+                value={characterDraft.characteristics[key]}
+                onChange={(event) =>
+                  setCharacterDraft({
+                    ...characterDraft,
+                    characteristics: {
+                      ...characterDraft.characteristics,
+                      [key]: Number(event.target.value),
+                    },
+                  })
+                }
+                disabled={!canManageActiveCharacter}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="derived-grid">
+          <span>Idea {activeDerived.idea}</span>
+          <span>Luck {activeDerived.luck}</span>
+          <span>Know {activeDerived.know}</span>
+          <span>SAN Max {activeDerived.sanityMax}</span>
+        </div>
+      </section>
+
+      <section className="editor-section">
+        <h3>Status</h3>
+        <div className="field-grid three">
+          <label>
+            SAN
+            <input
+              type="number"
+              value={characterDraft.sanityCurrent}
+              onChange={(event) => setCharacterDraft({ ...characterDraft, sanityCurrent: Number(event.target.value) })}
+              disabled={!canManageActiveCharacter}
+            />
+          </label>
+          <label>
+            HP / {activeDerived.hitPointsMax}
+            <input
+              type="number"
+              value={characterDraft.hitPointsCurrent}
+              onChange={(event) =>
+                setCharacterDraft({ ...characterDraft, hitPointsCurrent: Number(event.target.value) })
+              }
+              disabled={!canManageActiveCharacter}
+            />
+          </label>
+          <label>
+            MP / {activeDerived.magicPointsMax}
+            <input
+              type="number"
+              value={characterDraft.magicPointsCurrent}
+              onChange={(event) =>
+                setCharacterDraft({ ...characterDraft, magicPointsCurrent: Number(event.target.value) })
+              }
+              disabled={!canManageActiveCharacter}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="editor-section">
+        <h3>Skills</h3>
+        <textarea
+          value={skillDraft}
+          onChange={(event) => setSkillDraft(event.target.value)}
+          placeholder={'目星: 65\n聞き耳: 55\n図書館: 60'}
+          disabled={!canManageActiveCharacter}
+        />
+      </section>
+
+      <section className="editor-section">
+        <h3>Equipment</h3>
+        <label>
+          武器
+          <textarea
+            value={characterDraft.weapons}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, weapons: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+        <label>
+          所持品
+          <textarea
+            value={characterDraft.possessions}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, possessions: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+      </section>
+
+      <section className="editor-section">
+        <h3>Background</h3>
+        {backgroundFields.map((field) => (
+          <label key={field.key}>
+            {field.label}
+            <textarea
+              value={characterDraft.background[field.key]}
+              onChange={(event) =>
+                setCharacterDraft({
+                  ...characterDraft,
+                  background: { ...characterDraft.background, [field.key]: event.target.value },
+                })
+              }
+              disabled={!canManageActiveCharacter}
+            />
+          </label>
+        ))}
+        <label>
+          メモ
+          <textarea
+            value={characterDraft.memo}
+            onChange={(event) => setCharacterDraft({ ...characterDraft, memo: event.target.value })}
+            disabled={!canManageActiveCharacter}
+          />
+        </label>
+      </section>
+
+      <div className="editor-actions">
+        <button className="button-primary" type="submit" disabled={!canManageActiveCharacter}>
+          <Save size={16} />
+          保存
+        </button>
+        <button className="button-secondary" type="button" onClick={onArchive} disabled={!canManageActiveCharacter}>
+          <Archive size={16} />
+          アーカイブ
+        </button>
+      </div>
+    </form>
   );
 }
 
