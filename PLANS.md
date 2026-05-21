@@ -12,9 +12,8 @@
   - Airy editorial spacing, thin borders, small radii, no heavy shadows, no gradients, no glass effects.
 
 ## Product Scope
-- Email magic-link/password authentication through Supabase Auth.
 - Discord OAuth authentication through Supabase Auth.
-- Access gated by email allowlist and Discord provider ID allowlist tables.
+- Access gated by Discord provider ID allowlist tables.
 - Text-based RP timeline.
 - Speaker selection from a character name or the player-side `中の人` speaker.
 - Scene memo panel and My Page character management.
@@ -22,7 +21,9 @@
 - A room is a collection of scenes.
 - Scene listing, creation, and creator-only settings live inside the selected room menu.
 - Scenes store one location, a time label, and can be pinned on the room map.
-- Scene creators may edit only their own scenes.
+- Room creators may delegate scene create/delete permission to selected room members.
+- Scene creators may delegate scene setting edit permission to selected room members.
+- My Page shows the signed-in Discord profile.
 - Internal CoC 6th edition investigator database with per-user character ownership.
 - World support tools for room map image annotation and session log formatting.
 - Message authors may edit or delete only their own RP messages.

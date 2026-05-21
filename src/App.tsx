@@ -7,11 +7,9 @@ import {
   BookOpen,
   Check,
   ClipboardCopy,
-  DoorOpen,
   Pencil,
   Lock,
   LogOut,
-  Mail,
   Map,
   MapPin,
   MessageCircle,
@@ -61,6 +59,28 @@ type AllowedMember = {
   display_name: string;
   role: AccessRole;
 };
+type RoomMember = {
+  roomId: string;
+  userId: string;
+  displayName: string;
+  role: AccessRole;
+};
+type RoomScenePermission = {
+  roomId: string;
+  userId: string;
+  canCreateScenes: boolean;
+  canDeleteScenes: boolean;
+};
+type SceneEditPermission = {
+  sceneId: string;
+  userId: string;
+};
+type DiscordProfile = {
+  id: string | null;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
 type CharacterLike = Omit<Partial<Character>, 'characteristics' | 'skills' | 'background'> & {
   id: string;
   name?: string;
@@ -72,7 +92,6 @@ type SceneDraft = Pick<Scene, 'id' | 'title' | 'summary' | 'status' | 'locationN
 type DerivedCoCValues = ReturnType<typeof deriveCoCValues>;
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
-const magicLinkCooldownSeconds = 60;
 const characteristicKeys: Array<keyof CoCCharacteristics> = ['str', 'con', 'siz', 'int', 'pow', 'dex', 'app', 'edu'];
 const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
   { key: 'description', label: '外見・描写' },
@@ -89,6 +108,10 @@ const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
 const skillCategories = getSkillCategories();
 const demoUserId = 'demo-user';
 const playerSpeakerId = 'speaker-player';
+const demoRoomMembers: RoomMember[] = [
+  { roomId: 'room-demo', userId: 'demo-guest', displayName: 'Guest', role: 'player' },
+  { roomId: 'room-demo', userId: 'demo-gm', displayName: 'GM', role: 'gm' },
+];
 
 const defaultCharacteristics: CoCCharacteristics = {
   str: 10,
@@ -117,16 +140,19 @@ const defaultBackground: CoCBackground = {
 export function App() {
   const [authState, setAuthState] = useState<AuthState>(isSupabaseConfigured ? 'checking' : 'demo');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [currentAccessRole, setCurrentAccessRole] = useState<AccessRole | null>(null);
-  const [isMagicLinkSending, setIsMagicLinkSending] = useState(false);
-  const [magicLinkCooldown, setMagicLinkCooldown] = useState(0);
+  const [discordProfile, setDiscordProfile] = useState<DiscordProfile | null>(null);
   const [rooms, setRooms] = useState<Room[]>(demoRooms);
   const [characters, setCharacters] = useState<Character[]>(demoCharacters);
   const [scenes, setScenes] = useState<Scene[]>(demoScenes);
   const [messages, setMessages] = useState<RpMessage[]>(demoMessages);
+  const [roomMembers, setRoomMembers] = useState<RoomMember[]>(demoRoomMembers);
+  const [roomScenePermissions, setRoomScenePermissions] = useState<RoomScenePermission[]>([]);
+  const [sceneEditPermissions, setSceneEditPermissions] = useState<SceneEditPermission[]>([]);
+  const [selectedRoomPermissionUserId, setSelectedRoomPermissionUserId] = useState('');
+  const [roomPermissionDraft, setRoomPermissionDraft] = useState({ canCreateScenes: false, canDeleteScenes: false });
+  const [selectedSceneEditorUserId, setSelectedSceneEditorUserId] = useState('');
   const [selectedCharacterId, setSelectedCharacterId] = useState(characters[0].id);
   const [selectedSceneId, setSelectedSceneId] = useState(scenes[0].id);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(demoRooms[0].id);
@@ -159,21 +185,15 @@ export function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (magicLinkCooldown <= 0) return;
-
-    const timer = window.setInterval(() => {
-      setMagicLinkCooldown((remaining) => Math.max(remaining - 1, 0));
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [magicLinkCooldown]);
-
   const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
   const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
   const activeRoom = rooms.find((room) => room.id === selectedRoomId) ?? rooms[0];
   const roomScenes = scenes.filter((scene) => scene.roomId === activeRoom.id);
   const activeActorId = currentUserId ?? (authState === 'demo' ? demoUserId : null);
+  const activeRoomMembers = roomMembers.filter((member) => member.roomId === activeRoom.id && member.userId !== currentUserId);
+  const activeRoomScenePermission = roomScenePermissions.find(
+    (permission) => permission.roomId === activeRoom.id && permission.userId === activeActorId,
+  );
   const activeSceneMap = sceneMaps.find((sceneMap) => sceneMap.sceneId === activeRoom.id) ?? null;
   const scenePins = roomScenes.filter((scene) => scene.mapX !== null && scene.mapY !== null);
   const activeDerived = deriveCoCValues(characterDraft);
@@ -184,10 +204,22 @@ export function App() {
     currentAccessRole === 'owner' ||
     currentAccessRole === 'gm';
   const canEditActiveRoom = authState === 'demo' || activeRoom?.createdBy === currentUserId || currentAccessRole === 'owner';
-  const canEditSceneDraft = authState === 'demo' || sceneDraft.createdBy === currentUserId;
+  const canManageRoomScenePermissions = authState === 'demo' || activeRoom.createdBy === currentUserId;
+  const canCreateActiveRoomScene =
+    authState === 'demo' || activeRoom.createdBy === currentUserId || Boolean(activeRoomScenePermission?.canCreateScenes);
+  const canEditSceneDraft =
+    authState === 'demo' ||
+    sceneDraft.createdBy === currentUserId ||
+    sceneEditPermissions.some((permission) => permission.sceneId === sceneDraft.id && permission.userId === currentUserId);
+  const canGrantSceneDraftEditors = authState === 'demo' || sceneDraft.createdBy === currentUserId;
   const recentScenes = roomScenes.slice(-3).reverse();
   const selectedSpeakerIsPlayer = selectedCharacterId === playerSpeakerId;
   const messageMode: 'ic' | 'ooc' = selectedSpeakerIsPlayer ? 'ooc' : 'ic';
+  const canDeleteScene = (scene: Scene) =>
+    authState === 'demo' ||
+    activeRoom.createdBy === currentUserId ||
+    scene.createdBy === currentUserId ||
+    Boolean(activeRoomScenePermission?.canDeleteScenes);
 
   const groupedMessages = useMemo(
     () =>
@@ -218,6 +250,32 @@ export function App() {
   }, [activeScene?.id]);
 
   useEffect(() => {
+    if (!activeRoomMembers.length) {
+      setSelectedRoomPermissionUserId('');
+      setSelectedSceneEditorUserId('');
+      return;
+    }
+
+    setSelectedRoomPermissionUserId((current) =>
+      activeRoomMembers.some((member) => member.userId === current) ? current : activeRoomMembers[0].userId,
+    );
+    setSelectedSceneEditorUserId((current) =>
+      activeRoomMembers.some((member) => member.userId === current) ? current : activeRoomMembers[0].userId,
+    );
+  }, [activeRoom.id, roomMembers, currentUserId]);
+
+  useEffect(() => {
+    const permission = roomScenePermissions.find(
+      (currentPermission) =>
+        currentPermission.roomId === activeRoom.id && currentPermission.userId === selectedRoomPermissionUserId,
+    );
+    setRoomPermissionDraft({
+      canCreateScenes: Boolean(permission?.canCreateScenes),
+      canDeleteScenes: Boolean(permission?.canDeleteScenes),
+    });
+  }, [activeRoom.id, roomScenePermissions, selectedRoomPermissionUserId]);
+
+  useEffect(() => {
     const firstScene = scenes.find((scene) => scene.roomId === activeRoom.id);
     if (firstScene && !scenes.some((scene) => scene.id === selectedSceneId && scene.roomId === activeRoom.id)) {
       setSelectedSceneId(firstScene.id);
@@ -240,59 +298,45 @@ export function App() {
     setSelectedMapPinId(null);
   }, [selectedSceneId]);
 
+  useEffect(() => {
+    if (!supabase || authState !== 'allowed' || !activeRoom?.id) return;
+    void loadActiveRoomContent(activeRoom.id);
+  }, [activeRoom?.id, authState]);
+
   async function handleAuthenticatedUser(user: User | null) {
     if (!user) {
       setAuthState('signed-out');
       setCurrentUserId(null);
       setCurrentAccessRole(null);
+      setDiscordProfile(null);
       return;
     }
 
     const discordUserId = getDiscordUserId(user);
+    setDiscordProfile(getDiscordProfile(user));
     const profileKey = getProfileKey(user, discordUserId);
     if (!profileKey) {
-      setAuthMessage('ログイン元のメールアドレスまたは許可済みDiscord IDを確認できませんでした。');
+      setAuthMessage('Discordアカウントを確認できませんでした。Discordでログインしてください。');
       setAuthState('blocked');
       return;
     }
 
     setCurrentUserId(user.id);
-    const allowedMember = await checkAllowed(user.email, discordUserId);
+    const allowedMember = await checkAllowed(discordUserId);
     setCurrentAccessRole(allowedMember?.role ?? null);
     if (allowedMember) await ensureMemberBootstrap(user.id, profileKey, allowedMember);
     if (allowedMember) await loadRoomData(user.id, profileKey, allowedMember);
     setAuthState(allowedMember ? 'allowed' : 'blocked');
   }
 
-  async function checkAllowed(userEmail?: string, discordUserId?: string | null) {
+  async function checkAllowed(discordUserId?: string | null) {
     if (!supabase) return null;
 
-    if (discordUserId) {
-      const { data, error } = await supabase
-        .from('allowed_discord_accounts')
-        .select('discord_user_id, display_name, role')
-        .eq('discord_user_id', discordUserId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (error) {
-        setAuthMessage(error.message);
-        return null;
-      }
-      if (data) {
-        return {
-          discordUserId: data.discord_user_id,
-          display_name: data.display_name,
-          role: data.role,
-        } as AllowedMember;
-      }
-    }
-
-    if (!userEmail) return null;
+    if (!discordUserId) return null;
     const { data, error } = await supabase
-      .from('allowed_members')
-      .select('email, display_name, role')
-      .eq('email', userEmail.toLowerCase())
+      .from('allowed_discord_accounts')
+      .select('discord_user_id, display_name, role')
+      .eq('discord_user_id', discordUserId)
       .eq('is_active', true)
       .maybeSingle();
 
@@ -300,7 +344,12 @@ export function App() {
       setAuthMessage(error.message);
       return null;
     }
-    return data as AllowedMember | null;
+    if (!data) return null;
+    return {
+      discordUserId: data.discord_user_id,
+      display_name: data.display_name,
+      role: data.role,
+    } as AllowedMember;
   }
 
   async function ensureMemberBootstrap(userId: string, profileKey: string, allowedMember: AllowedMember) {
@@ -417,8 +466,7 @@ export function App() {
     const { data: rooms, error: roomsError } = await supabase
       .from('rooms')
       .select('id, title, summary, tags, created_by')
-      .order('created_at', { ascending: true })
-      .limit(1);
+      .order('created_at', { ascending: true });
 
     if (roomsError) {
       setAuthMessage(roomsError.message);
@@ -436,11 +484,19 @@ export function App() {
     setRooms(mappedRooms);
     setRoomDraft(mappedRooms[0]);
 
-    const [{ data: remoteScenes }, remoteCharacters, { data: remoteMessages }] = await Promise.all([
+    const roomIds = mappedRooms.map((room) => room.id);
+    const [
+      { data: remoteScenes },
+      remoteCharacters,
+      { data: remoteMessages },
+      { data: remoteRoomMembers },
+      { data: remoteRoomScenePermissions },
+      { data: remoteSceneEditPermissions },
+    ] = await Promise.all([
       supabase
         .from('scenes')
         .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
-        .eq('room_id', firstRoom.id)
+        .in('room_id', roomIds)
         .order('created_at', { ascending: true }),
       fetchCharactersApi(firstRoom.id).catch((error) => {
         setAuthMessage(error instanceof Error ? error.message : '探索者一覧を取得できませんでした。');
@@ -452,6 +508,17 @@ export function App() {
         .eq('room_id', firstRoom.id)
         .order('created_at', { ascending: true })
         .limit(100),
+      supabase
+        .from('room_members')
+        .select('room_id, user_id, role, profiles(display_name, email)')
+        .in('room_id', roomIds),
+      supabase
+        .from('room_scene_permissions')
+        .select('room_id, user_id, can_create_scenes, can_delete_scenes')
+        .in('room_id', roomIds),
+      supabase
+        .from('scene_edit_permissions')
+        .select('scene_id, user_id'),
     ]);
 
     if (remoteScenes?.length) {
@@ -488,37 +555,63 @@ export function App() {
         }),
       );
     }
+
+    if (remoteRoomMembers) {
+      setRoomMembers(remoteRoomMembers.map(rowToRoomMember));
+    }
+
+    if (remoteRoomScenePermissions) {
+      setRoomScenePermissions(remoteRoomScenePermissions.map(rowToRoomScenePermission));
+    }
+
+    if (remoteSceneEditPermissions) {
+      setSceneEditPermissions(remoteSceneEditPermissions.map(rowToSceneEditPermission));
+    }
   }
 
-  async function handleSignIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function loadActiveRoomContent(roomId: string) {
     if (!supabase) return;
 
-    setAuthMessage('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthMessage(error.message);
-  }
+    const [remoteCharacters, { data: remoteMessages }] = await Promise.all([
+      fetchCharactersApi(roomId).catch((error) => {
+        setAuthMessage(error instanceof Error ? error.message : '探索者一覧を取得できませんでした。');
+        return [] as CharacterRow[];
+      }),
+      supabase
+        .from('rp_messages')
+        .select('id, character_id, author_id, mode, body, created_at, profiles(display_name), characters(name)')
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: true })
+        .limit(100),
+    ]);
 
-  async function handleMagicLink() {
-    if (!supabase || !email || isMagicLinkSending || magicLinkCooldown > 0) return;
-
-    setAuthMessage('');
-    setIsMagicLinkSending(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: authRedirectUrl || window.location.origin },
-    });
-    setIsMagicLinkSending(false);
-    setMagicLinkCooldown(magicLinkCooldownSeconds);
-    if (error) {
-      setAuthMessage(
-        error.message.toLowerCase().includes('rate limit')
-          ? 'メール送信回数の上限に達しました。少し時間をおいてから、同じボタンを1回だけ押してください。'
-          : error.message,
-      );
-      return;
+    if (remoteCharacters.length) {
+      const mappedCharacters = remoteCharacters.map(rowToCharacter);
+      setCharacters(mappedCharacters);
+      setSelectedCharacterId(mappedCharacters[0].id);
     }
-    setAuthMessage('ログインリンクを送信しました。届いた最新のメールだけを開いてください。');
+
+    if (remoteMessages) {
+      setMessages(
+        remoteMessages.map((message) => {
+          const characterRelation = Array.isArray(message.characters) ? message.characters[0] : message.characters;
+          const profileRelation = Array.isArray(message.profiles) ? message.profiles[0] : message.profiles;
+
+          return {
+            id: message.id,
+            characterId: message.character_id,
+            authorId: message.author_id,
+            author: characterRelation?.name ?? profileRelation?.display_name ?? 'Unknown',
+            mode: message.mode,
+            body: message.body,
+            createdAt: new Intl.DateTimeFormat('ja-JP', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(new Date(message.created_at)),
+          };
+        }),
+      );
+    }
   }
 
   async function handleDiscordSignIn() {
@@ -529,7 +622,7 @@ export function App() {
       provider: 'discord',
       options: {
         redirectTo: authRedirectUrl || window.location.origin,
-        scopes: 'identify email',
+        scopes: 'identify',
       },
     });
     if (error) setAuthMessage(error.message);
@@ -804,6 +897,11 @@ export function App() {
   }
 
   async function handleCreateScene() {
+    if (!canCreateActiveRoomScene) {
+      setAuthMessage('このルームでシーンを作成する権限がありません。');
+      return;
+    }
+
     const targetRoomId = activeRoom.id;
     const nextScene = createDefaultScene(targetRoomId, activeActorId);
 
@@ -866,7 +964,6 @@ export function App() {
           tags: nextScene.tags,
         })
         .eq('id', nextScene.id)
-        .eq('created_by', currentUserId)
         .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
         .single();
 
@@ -885,15 +982,97 @@ export function App() {
     setSceneDraft(nextScene);
   }
 
+  async function handleDeleteScene(scene: Scene) {
+    if (!canDeleteScene(scene)) return;
+
+    if (supabase && authState === 'allowed') {
+      const { error } = await supabase.from('scenes').delete().eq('id', scene.id);
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+    }
+
+    setScenes((current) => {
+      const nextScenes = current.filter((currentScene) => currentScene.id !== scene.id);
+      const nextRoomScene = nextScenes.find((currentScene) => currentScene.roomId === activeRoom.id);
+      if (nextRoomScene) {
+        setSelectedSceneId(nextRoomScene.id);
+        setSceneDraft(nextRoomScene);
+      }
+      return nextScenes;
+    });
+    setConfiguredSceneId(null);
+  }
+
+  async function handleSaveRoomScenePermission(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRoomPermissionUserId || !canManageRoomScenePermissions) return;
+
+    const nextPermission: RoomScenePermission = {
+      roomId: activeRoom.id,
+      userId: selectedRoomPermissionUserId,
+      canCreateScenes: roomPermissionDraft.canCreateScenes,
+      canDeleteScenes: roomPermissionDraft.canDeleteScenes,
+    };
+
+    if (supabase && authState === 'allowed' && currentUserId) {
+      const { error } = await supabase.from('room_scene_permissions').upsert({
+        room_id: activeRoom.id,
+        user_id: selectedRoomPermissionUserId,
+        granted_by: currentUserId,
+        can_create_scenes: nextPermission.canCreateScenes,
+        can_delete_scenes: nextPermission.canDeleteScenes,
+      });
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+    }
+
+    setRoomScenePermissions((current) => [
+      ...current.filter(
+        (permission) => !(permission.roomId === nextPermission.roomId && permission.userId === nextPermission.userId),
+      ),
+      nextPermission,
+    ]);
+    setAuthMessage('シーン権限を保存しました。');
+  }
+
+  async function handleGrantSceneEditor() {
+    if (!selectedSceneEditorUserId || !canGrantSceneDraftEditors) return;
+    const nextPermission = { sceneId: sceneDraft.id, userId: selectedSceneEditorUserId };
+
+    if (supabase && authState === 'allowed' && currentUserId) {
+      const { error } = await supabase.from('scene_edit_permissions').upsert({
+        scene_id: sceneDraft.id,
+        user_id: selectedSceneEditorUserId,
+        granted_by: currentUserId,
+      });
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+    }
+
+    setSceneEditPermissions((current) =>
+      current.some(
+        (permission) => permission.sceneId === nextPermission.sceneId && permission.userId === nextPermission.userId,
+      )
+        ? current
+        : [...current, nextPermission],
+    );
+    setAuthMessage('シーン編集者を追加しました。');
+  }
+
   async function assignSceneLocation(scene: Scene, x: number, y: number, locationName?: string) {
     const nextScene = { ...scene, mapX: x, mapY: y, locationName: locationName || scene.locationName };
     if (supabase && authState === 'allowed') {
-      if (scene.createdBy !== currentUserId) return;
+      if (!canEditSceneDraft) return;
       const { data, error } = await supabase
         .from('scenes')
         .update({ map_x: x, map_y: y, location_name: nextScene.locationName })
         .eq('id', scene.id)
-        .eq('created_by', currentUserId)
         .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
         .single();
 
@@ -930,51 +1109,15 @@ export function App() {
           </div>
           <h1 id="auth-title">招待されたメンバーだけが入れるRPスペース</h1>
           <p>
-            Supabase Authでログインし、許可リストに登録されたメールアドレスまたはDiscordアカウントだけがルームへ入れます。
+            Discordでログインし、許可リストに登録されたDiscordアカウントだけがルームへ入れます。
           </p>
-          <form className="auth-form" onSubmit={handleSignIn}>
-            <label>
-              メールアドレス
-              <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                type="email"
-                autoComplete="username"
-                required
-              />
-            </label>
-            <label>
-              パスワード
-              <input
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                type="password"
-                autoComplete="current-password"
-              />
-            </label>
-            <button className="button-primary" type="submit">
-              <DoorOpen size={17} />
-              ログイン
-            </button>
+          <div className="auth-form">
             <button className="button-primary discord-button" type="button" onClick={handleDiscordSignIn}>
               <MessageCircle size={17} />
               Discordでログイン
             </button>
-            <button
-              className="button-secondary"
-              type="button"
-              onClick={handleMagicLink}
-              disabled={isMagicLinkSending || magicLinkCooldown > 0}
-            >
-              <Mail size={17} />
-              {magicLinkCooldown > 0
-                ? `${magicLinkCooldown}秒後に再送`
-                : isMagicLinkSending
-                  ? '送信中'
-                  : 'マジックリンクを送る'}
-            </button>
-          </form>
-          {authState === 'blocked' && <p className="error">このメールアドレスは許可リストにありません。</p>}
+          </div>
+          {authState === 'blocked' && <p className="error">このDiscordアカウントは許可リストにありません。</p>}
           {authMessage && <p className="notice">{authMessage}</p>}
         </section>
       </main>
@@ -1132,7 +1275,12 @@ export function App() {
                     <h2>{activeRoom.title}</h2>
                   </div>
                   <div className="panel-actions">
-                    <button className="button-secondary" type="button" onClick={handleCreateScene}>
+                    <button
+                      className="button-secondary"
+                      type="button"
+                      onClick={handleCreateScene}
+                      disabled={!canCreateActiveRoomScene}
+                    >
                       <Plus size={16} />
                       新規シーン
                     </button>
@@ -1175,10 +1323,69 @@ export function App() {
                             <Settings size={15} />
                           </button>
                         )}
+                        {canDeleteScene(scene) && (
+                          <button
+                            className="mini-icon-button"
+                            type="button"
+                            onClick={() => void handleDeleteScene(scene)}
+                            aria-label="シーン削除"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
+                {canManageRoomScenePermissions && (
+                  <form className="inline-editor" onSubmit={handleSaveRoomScenePermission}>
+                    <div className="tool-panel-header">
+                      <div>
+                        <p>Room Permission</p>
+                        <h2>シーン権限</h2>
+                      </div>
+                      <button className="button-primary" type="submit" disabled={!selectedRoomPermissionUserId}>
+                        <Save size={16} />
+                        保存
+                      </button>
+                    </div>
+                    <div className="field-grid three">
+                      <label>
+                        対象ユーザ
+                        <select
+                          value={selectedRoomPermissionUserId}
+                          onChange={(event) => setSelectedRoomPermissionUserId(event.target.value)}
+                        >
+                          {activeRoomMembers.map((member) => (
+                            <option key={member.userId} value={member.userId}>
+                              {member.displayName} / {member.role}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={roomPermissionDraft.canCreateScenes}
+                          onChange={(event) =>
+                            setRoomPermissionDraft({ ...roomPermissionDraft, canCreateScenes: event.target.checked })
+                          }
+                        />
+                        シーン作成
+                      </label>
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={roomPermissionDraft.canDeleteScenes}
+                          onChange={(event) =>
+                            setRoomPermissionDraft({ ...roomPermissionDraft, canDeleteScenes: event.target.checked })
+                          }
+                        />
+                        シーン削除
+                      </label>
+                    </div>
+                  </form>
+                )}
                 {configuredSceneId === sceneDraft.id && canEditSceneDraft ? (
                   <form className="inline-editor" onSubmit={handleSaveScene}>
                     <div className="tool-panel-header">
@@ -1278,6 +1485,32 @@ export function App() {
                         disabled={!canEditSceneDraft}
                       />
                     </label>
+                    {canGrantSceneDraftEditors && (
+                      <div className="field-grid two">
+                        <label>
+                          編集を許可するユーザ
+                          <select
+                            value={selectedSceneEditorUserId}
+                            onChange={(event) => setSelectedSceneEditorUserId(event.target.value)}
+                          >
+                            {activeRoomMembers.map((member) => (
+                              <option key={member.userId} value={member.userId}>
+                                {member.displayName} / {member.role}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          className="button-secondary permission-button"
+                          type="button"
+                          onClick={handleGrantSceneEditor}
+                          disabled={!selectedSceneEditorUserId}
+                        >
+                          <UsersRound size={16} />
+                          編集許可
+                        </button>
+                      </div>
+                    )}
                   </form>
                 ) : (
                   <section className="inline-editor" aria-label="選択中シーン">
@@ -1330,6 +1563,23 @@ export function App() {
 
           <div className="character-manager">
             <aside className="character-manager-list" aria-label="キャラ一覧">
+              {discordProfile && (
+                <section className="discord-profile-card" aria-label="Discordプロフィール">
+                  {discordProfile.avatarUrl ? (
+                    <img src={discordProfile.avatarUrl} alt="" />
+                  ) : (
+                    <span className="discord-avatar-fallback">
+                      <MessageCircle size={18} />
+                    </span>
+                  )}
+                  <div>
+                    <span>Discord</span>
+                    <strong>{discordProfile.displayName}</strong>
+                    <small>{discordProfile.username}</small>
+                    {discordProfile.id && <small>ID: {discordProfile.id}</small>}
+                  </div>
+                </section>
+              )}
               <div className="section-title">
                 <UsersRound size={16} />
                 キャラ一覧
@@ -1996,9 +2246,20 @@ function getDiscordUserId(user: User) {
   return providerId ? String(providerId) : null;
 }
 
+function getDiscordProfile(user: User): DiscordProfile | null {
+  const discordIdentity = user.identities?.find((identity) => identity.provider === 'discord');
+  const identityData = discordIdentity?.identity_data;
+  if (!discordIdentity || !identityData) return null;
+  const id = getDiscordUserId(user);
+  const username = String(identityData.preferred_username ?? identityData.user_name ?? identityData.name ?? 'Discord User');
+  const displayName = String(identityData.full_name ?? identityData.name ?? identityData.global_name ?? username);
+  const avatarUrl = identityData.avatar_url ? String(identityData.avatar_url) : null;
+  return { id, username, displayName, avatarUrl };
+}
+
 function getProfileKey(user: User, discordUserId: string | null) {
   if (discordUserId) return `discord:${discordUserId}`;
-  return user.email ? user.email.toLowerCase() : null;
+  return null;
 }
 
 function rowToRoom(room: {
@@ -2015,6 +2276,43 @@ function rowToRoom(room: {
     tags: normalizeTags(room.tags),
     createdBy: room.created_by ?? null,
   };
+}
+
+function rowToRoomMember(row: {
+  room_id: string;
+  user_id: string;
+  role?: string | null;
+  profiles?: { display_name?: string | null; email?: string | null } | Array<{ display_name?: string | null; email?: string | null }> | null;
+}): RoomMember {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  return {
+    roomId: row.room_id,
+    userId: row.user_id,
+    displayName: profile?.display_name ?? profile?.email ?? 'Unknown',
+    role: isAccessRole(row.role) ? row.role : 'player',
+  };
+}
+
+function rowToRoomScenePermission(row: {
+  room_id: string;
+  user_id: string;
+  can_create_scenes?: boolean | null;
+  can_delete_scenes?: boolean | null;
+}): RoomScenePermission {
+  return {
+    roomId: row.room_id,
+    userId: row.user_id,
+    canCreateScenes: Boolean(row.can_create_scenes),
+    canDeleteScenes: Boolean(row.can_delete_scenes),
+  };
+}
+
+function rowToSceneEditPermission(row: { scene_id: string; user_id: string }): SceneEditPermission {
+  return { sceneId: row.scene_id, userId: row.user_id };
+}
+
+function isAccessRole(role: string | null | undefined): role is AccessRole {
+  return role === 'owner' || role === 'gm' || role === 'player' || role === 'viewer';
 }
 
 function rowToScene(scene: {

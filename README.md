@@ -16,14 +16,7 @@ If `.env` is not configured, the app runs in demo mode so the interface can be r
 
 1. Create a Supabase project.
 2. Apply `supabase/schema.sql` in the Supabase SQL editor or through your migration workflow.
-3. Add invited users:
-
-```sql
-insert into public.allowed_members (email, display_name)
-values ('player@example.com', 'Player Name');
-```
-
-To allow a specific Discord account, add its Discord user ID:
+3. Add invited Discord users by Discord user ID:
 
 ```sql
 insert into public.allowed_discord_accounts (discord_user_id, display_name, role)
@@ -34,18 +27,7 @@ on conflict (discord_user_id) do update
       is_active = true;
 ```
 
-For a developer/room owner account:
-
-```sql
-insert into public.allowed_members (email, display_name, role)
-values ('developer@example.com', 'Developer Name', 'owner')
-on conflict (email) do update
-  set display_name = excluded.display_name,
-      role = excluded.role,
-      is_active = true;
-```
-
-4. Let users log in with a Magic Link. Supabase Auth creates the auth user on first successful Magic Link login.
+4. Let users log in with Discord. Supabase Auth creates the auth user on first successful Discord OAuth login.
 5. Add rows to `profiles`, `rooms`, and `room_members` for users who should access a room.
 6. Put the project URL and public key in `.env`.
 
@@ -56,10 +38,12 @@ Character CRUD runs through Cloudflare Pages Functions under `/api/characters`. 
 ## Access Model
 
 - A user must be authenticated.
-- Their email must exist in `public.allowed_members` with `is_active = true`, or their Discord OAuth provider ID must exist in `public.allowed_discord_accounts` with `is_active = true`.
+- Their Discord OAuth provider ID must exist in `public.allowed_discord_accounts` with `is_active = true`.
 - They must also exist in `public.room_members` for a room to read or post inside that room.
 - An `owner` or `gm` allowlist role can bootstrap the first room on first login.
 - Discord OAuth users are restricted by Supabase Auth's `auth.identities.provider_id`, so the allowlist can target a specific Discord account even if the email changes.
+- Scene creation/deletion is limited to the room creator and room members granted `room_scene_permissions`.
+- Scene setting edits are limited to the scene creator and room members granted `scene_edit_permissions`; room members retain read access.
 
 The frontend only uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Do not put a Supabase service-role key in `.env` for this app.
 
@@ -86,9 +70,7 @@ SUPABASE_ANON_KEY
 
 `SUPABASE_URL` and `SUPABASE_ANON_KEY` are for Pages Functions. They may match the `VITE_` values. Do not configure a service-role key for the character API.
 
-Set `VITE_AUTH_REDIRECT_URL` to the canonical deployed URL, for example `https://narikiri-trpg-room.pages.dev`, so Magic Links generated from a local session do not redirect back to localhost. After deployment, add the deployed URL to Supabase Auth redirect URLs.
-
-Supabase's built-in Auth email sender is only suitable for light testing and can return `email rate limit exceeded`. For production or repeated testing, configure a custom SMTP provider in Supabase Auth settings and avoid repeatedly requesting Magic Links for the same address.
+Set `VITE_AUTH_REDIRECT_URL` to the canonical deployed URL, for example `https://narikiri-trpg-room.pages.dev`, so Discord OAuth redirects do not return to localhost. After deployment, add the deployed URL to Supabase Auth redirect URLs.
 
 To enable Discord login, configure the Discord provider in Supabase Auth. The Discord application redirect/callback URL is:
 

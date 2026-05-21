@@ -146,16 +146,11 @@ security definer
 set search_path = public, auth
 stable
 as $$
-  select coalesce(
-    (
-      select 'discord:' || discord.discord_user_id
-      from public.allowed_discord_accounts discord
-      where discord.discord_user_id = app_private.current_discord_user_id()
-        and discord.is_active = true
-      limit 1
-    ),
-    lower((select auth.jwt() ->> 'email'))
-  );
+  select 'discord:' || discord.discord_user_id
+  from public.allowed_discord_accounts discord
+  where discord.discord_user_id = app_private.current_discord_user_id()
+    and discord.is_active = true
+  limit 1;
 $$;
 
 create or replace function app_private.current_access_role()
@@ -165,22 +160,11 @@ security definer
 set search_path = public, auth
 stable
 as $$
-  select coalesce(
-    (
-      select allowed.role
-      from public.allowed_members allowed
-      where allowed.email = lower((select auth.jwt() ->> 'email'))
-        and allowed.is_active = true
-      limit 1
-    ),
-    (
-      select discord.role
-      from public.allowed_discord_accounts discord
-      where discord.discord_user_id = app_private.current_discord_user_id()
-        and discord.is_active = true
-      limit 1
-    )
-  );
+  select discord.role
+  from public.allowed_discord_accounts discord
+  where discord.discord_user_id = app_private.current_discord_user_id()
+    and discord.is_active = true
+  limit 1;
 $$;
 
 create or replace function app_private.is_allowed_member()
@@ -209,6 +193,110 @@ as $$
     );
 $$;
 
+create table if not exists public.room_scene_permissions (
+  room_id uuid not null references public.rooms(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  granted_by uuid not null references public.profiles(id) on delete cascade,
+  can_create_scenes boolean not null default false,
+  can_delete_scenes boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (room_id, user_id)
+);
+
+create table if not exists public.scene_edit_permissions (
+  scene_id uuid not null references public.scenes(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  granted_by uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (scene_id, user_id)
+);
+
+create or replace function app_private.can_manage_room_scene_permissions(target_room_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select exists (
+    select 1
+    from public.rooms room
+    where room.id = target_room_id
+      and room.created_by = (select auth.uid())
+  );
+$$;
+
+create or replace function app_private.can_create_scene(target_room_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select app_private.is_room_member(target_room_id)
+    and (
+      app_private.can_manage_room_scene_permissions(target_room_id)
+      or exists (
+        select 1
+        from public.room_scene_permissions permission
+        where permission.room_id = target_room_id
+          and permission.user_id = (select auth.uid())
+          and permission.can_create_scenes = true
+      )
+    );
+$$;
+
+create or replace function app_private.can_delete_scene(target_scene_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select exists (
+    select 1
+    from public.scenes scene
+    where scene.id = target_scene_id
+      and app_private.is_room_member(scene.room_id)
+      and (
+        scene.created_by = (select auth.uid())
+        or app_private.can_manage_room_scene_permissions(scene.room_id)
+        or exists (
+          select 1
+          from public.room_scene_permissions permission
+          where permission.room_id = scene.room_id
+            and permission.user_id = (select auth.uid())
+            and permission.can_delete_scenes = true
+        )
+      )
+  );
+$$;
+
+create or replace function app_private.can_edit_scene(target_scene_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select exists (
+    select 1
+    from public.scenes scene
+    where scene.id = target_scene_id
+      and app_private.is_room_member(scene.room_id)
+      and (
+        scene.created_by = (select auth.uid())
+        or exists (
+          select 1
+          from public.scene_edit_permissions permission
+          where permission.scene_id = scene.id
+            and permission.user_id = (select auth.uid())
+        )
+      )
+  );
+$$;
+
 alter table public.allowed_members enable row level security;
 alter table public.allowed_discord_accounts enable row level security;
 alter table public.profiles enable row level security;
@@ -216,6 +304,8 @@ alter table public.rooms enable row level security;
 alter table public.room_members enable row level security;
 alter table public.characters enable row level security;
 alter table public.scenes enable row level security;
+alter table public.room_scene_permissions enable row level security;
+alter table public.scene_edit_permissions enable row level security;
 alter table public.rp_messages enable row level security;
 
 grant select on public.allowed_members to authenticated;
@@ -225,6 +315,8 @@ grant select, insert, update on public.rooms to authenticated;
 grant select, insert, update, delete on public.room_members to authenticated;
 grant select, insert, update, delete on public.characters to authenticated;
 grant select, insert, update, delete on public.scenes to authenticated;
+grant select, insert, update, delete on public.room_scene_permissions to authenticated;
+grant select, insert, update, delete on public.scene_edit_permissions to authenticated;
 grant select, insert, update, delete on public.rp_messages to authenticated;
 
 create policy "Allowed users can confirm their own allowlist entry"
@@ -244,6 +336,23 @@ on public.profiles
 for select
 to authenticated
 using (app_private.is_allowed_member() and id = (select auth.uid()));
+
+drop policy if exists "Room members can read shared profiles" on public.profiles;
+create policy "Room members can read shared profiles"
+on public.profiles
+for select
+to authenticated
+using (
+  app_private.is_allowed_member()
+  and exists (
+    select 1
+    from public.room_members self_member
+    join public.room_members target_member
+      on target_member.room_id = self_member.room_id
+    where self_member.user_id = (select auth.uid())
+      and target_member.user_id = profiles.id
+  )
+);
 
 create policy "Allowed users can create their own profile"
 on public.profiles
@@ -436,45 +545,148 @@ for select
 to authenticated
 using (app_private.is_room_member(room_id));
 
-create policy "Room owners and GMs can insert scenes"
+drop policy if exists "Room owners and GMs can insert scenes" on public.scenes;
+drop policy if exists "Room scene creators can insert scenes" on public.scenes;
+create policy "Room scene creators can insert scenes"
 on public.scenes
 for insert
 to authenticated
 with check (
   created_by = (select auth.uid())
-  and
-  exists (
-    select 1 from public.room_members member
-    where member.room_id = scenes.room_id
-      and member.user_id = (select auth.uid())
-      and member.role in ('owner', 'gm')
-  )
+  and app_private.can_create_scene(room_id)
 );
 
 drop policy if exists "Room owners and GMs can update scenes" on public.scenes;
+drop policy if exists "Scene creators can update scenes" on public.scenes;
+drop policy if exists "Scene editors can update scenes" on public.scenes;
 create policy "Scene creators can update scenes"
 on public.scenes
 for update
 to authenticated
-using (
-  app_private.is_room_member(room_id)
-  and created_by = (select auth.uid())
-)
-with check (
-  app_private.is_room_member(room_id)
-  and created_by = (select auth.uid())
-);
+using (app_private.can_edit_scene(id))
+with check (app_private.can_edit_scene(id));
 
+drop policy if exists "Room owners and GMs can delete scenes" on public.scenes;
+drop policy if exists "Room scene deleters can delete scenes" on public.scenes;
 create policy "Room owners and GMs can delete scenes"
 on public.scenes
 for delete
 to authenticated
+using (app_private.can_delete_scene(id));
+
+drop policy if exists "Room members can read room scene permissions" on public.room_scene_permissions;
+create policy "Room members can read room scene permissions"
+on public.room_scene_permissions
+for select
+to authenticated
+using (app_private.is_room_member(room_id));
+
+drop policy if exists "Room creators can insert room scene permissions" on public.room_scene_permissions;
+create policy "Room creators can insert room scene permissions"
+on public.room_scene_permissions
+for insert
+to authenticated
+with check (
+  app_private.can_manage_room_scene_permissions(room_id)
+  and granted_by = (select auth.uid())
+  and app_private.is_room_member(room_id)
+  and exists (
+    select 1
+    from public.room_members member
+    where member.room_id = room_scene_permissions.room_id
+      and member.user_id = room_scene_permissions.user_id
+  )
+);
+
+drop policy if exists "Room creators can update room scene permissions" on public.room_scene_permissions;
+create policy "Room creators can update room scene permissions"
+on public.room_scene_permissions
+for update
+to authenticated
+using (app_private.can_manage_room_scene_permissions(room_id))
+with check (
+  app_private.can_manage_room_scene_permissions(room_id)
+  and granted_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.room_members member
+    where member.room_id = room_scene_permissions.room_id
+      and member.user_id = room_scene_permissions.user_id
+  )
+);
+
+drop policy if exists "Room creators can delete room scene permissions" on public.room_scene_permissions;
+create policy "Room creators can delete room scene permissions"
+on public.room_scene_permissions
+for delete
+to authenticated
+using (app_private.can_manage_room_scene_permissions(room_id));
+
+drop policy if exists "Room members can read scene edit permissions" on public.scene_edit_permissions;
+create policy "Room members can read scene edit permissions"
+on public.scene_edit_permissions
+for select
+to authenticated
 using (
   exists (
-    select 1 from public.room_members member
-    where member.room_id = scenes.room_id
-      and member.user_id = (select auth.uid())
-      and member.role in ('owner', 'gm')
+    select 1
+    from public.scenes scene
+    where scene.id = scene_edit_permissions.scene_id
+      and app_private.is_room_member(scene.room_id)
+  )
+);
+
+drop policy if exists "Scene creators can insert scene edit permissions" on public.scene_edit_permissions;
+create policy "Scene creators can insert scene edit permissions"
+on public.scene_edit_permissions
+for insert
+to authenticated
+with check (
+  granted_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.scenes scene
+    join public.room_members member on member.room_id = scene.room_id
+    where scene.id = scene_edit_permissions.scene_id
+      and scene.created_by = (select auth.uid())
+      and member.user_id = scene_edit_permissions.user_id
+  )
+);
+
+drop policy if exists "Scene creators can update scene edit permissions" on public.scene_edit_permissions;
+create policy "Scene creators can update scene edit permissions"
+on public.scene_edit_permissions
+for update
+to authenticated
+using (
+  exists (
+    select 1 from public.scenes scene
+    where scene.id = scene_edit_permissions.scene_id
+      and scene.created_by = (select auth.uid())
+  )
+)
+with check (
+  granted_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.scenes scene
+    join public.room_members member on member.room_id = scene.room_id
+    where scene.id = scene_edit_permissions.scene_id
+      and scene.created_by = (select auth.uid())
+      and member.user_id = scene_edit_permissions.user_id
+  )
+);
+
+drop policy if exists "Scene creators can delete scene edit permissions" on public.scene_edit_permissions;
+create policy "Scene creators can delete scene edit permissions"
+on public.scene_edit_permissions
+for delete
+to authenticated
+using (
+  exists (
+    select 1 from public.scenes scene
+    where scene.id = scene_edit_permissions.scene_id
+      and scene.created_by = (select auth.uid())
   )
 );
 
@@ -512,6 +724,8 @@ create index if not exists characters_owner_id_idx on public.characters(owner_id
 create index if not exists characters_room_id_is_archived_idx on public.characters(room_id, is_archived);
 create index if not exists scenes_room_id_idx on public.scenes(room_id);
 create index if not exists scenes_created_by_idx on public.scenes(created_by);
+create index if not exists room_scene_permissions_user_id_idx on public.room_scene_permissions(user_id);
+create index if not exists scene_edit_permissions_user_id_idx on public.scene_edit_permissions(user_id);
 create index if not exists rp_messages_room_id_created_at_idx on public.rp_messages(room_id, created_at);
 create index if not exists rp_messages_scene_id_idx on public.rp_messages(scene_id);
 create index if not exists rp_messages_character_id_idx on public.rp_messages(character_id);
