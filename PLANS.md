@@ -16,10 +16,12 @@
 - Discord OAuth authentication through Supabase Auth.
 - Access gated by email allowlist and Discord provider ID allowlist tables.
 - Text-based RP timeline.
-- Character selection and IC/OOC posting mode.
+- Speaker selection from a character name or the player-side `中の人` speaker.
 - Scene memo panel and My Page character management.
-- Room and scene menu screens with tags.
-- Scenes store location information and can be pinned on the room map.
+- The room menu opens a room list; room settings open from each room's gear button.
+- A room is a collection of scenes.
+- Scene menu screens are filtered by selected room and support tags.
+- Scenes store one location, a time label, and can be pinned on the room map.
 - Scene creators may edit only their own scenes.
 - Internal CoC 6th edition investigator database with per-user character ownership.
 - World support tools for room map image annotation and session log formatting.

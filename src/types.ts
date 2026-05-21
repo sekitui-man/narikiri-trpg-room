@@ -72,6 +72,7 @@ export type Scene = {
   status: 'active' | 'paused' | 'archived';
   summary: string;
   locationName: string;
+  timeLabel: string;
   mapX: number | null;
   mapY: number | null;
   tags: string[];

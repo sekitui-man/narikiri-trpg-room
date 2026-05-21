@@ -94,6 +94,7 @@ create table if not exists public.scenes (
   title text not null,
   summary text not null default '',
   location_name text not null default '',
+  time_label text not null default '',
   map_x numeric check (map_x is null or (map_x >= 0 and map_x <= 100)),
   map_y numeric check (map_y is null or (map_y >= 0 and map_y <= 100)),
   tags text[] not null default '{}',
@@ -102,6 +103,7 @@ create table if not exists public.scenes (
 );
 alter table public.scenes add column if not exists created_by uuid references public.profiles(id) on delete set null;
 alter table public.scenes add column if not exists location_name text not null default '';
+alter table public.scenes add column if not exists time_label text not null default '';
 alter table public.scenes add column if not exists map_x numeric check (map_x is null or (map_x >= 0 and map_x <= 100));
 alter table public.scenes add column if not exists map_y numeric check (map_y is null or (map_y >= 0 and map_y <= 100));
 alter table public.scenes add column if not exists tags text[] not null default '{}';

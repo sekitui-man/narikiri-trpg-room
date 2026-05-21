@@ -549,6 +549,10 @@ select:focus {
   margin-bottom: 16px;
 }
 
+.rail-select {
+  margin-bottom: 16px;
+}
+
 .scene-item,
 .character-item {
   width: 100%;
@@ -563,6 +567,22 @@ select:focus {
 .scene-item {
   display: grid;
   gap: 6px;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.inline-actions .button-secondary {
+  min-height: 32px;
+  padding: 5px 10px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .character-item {
@@ -602,6 +622,30 @@ select:focus {
   line-height: 16px;
   font-weight: 400;
   letter-spacing: 0.02em;
+}
+
+.read-field {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.read-field span {
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.read-field strong {
+  color: var(--primary);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
 }
 
 .character-item span:last-child {

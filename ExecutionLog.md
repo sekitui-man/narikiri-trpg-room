@@ -29,3 +29,4 @@
 - Replaced free-form skill entry with a fixed CoC 6th edition skill table and added client-side map annotation plus log formatting tools.
 - Linked local maps to scenes, added author-only message edit/delete controls, and documented IC/OOC meaning in the composer.
 - Added room and scene menu screens, scene tags/location/map coordinates, recent-scene sidebar behavior, and creator-only scene editing.
+- Reworked the room menu so the top-level room tab opens a room list, moved room settings behind each room gear button, added scene time labels, and changed posting controls to character name or `中の人`.

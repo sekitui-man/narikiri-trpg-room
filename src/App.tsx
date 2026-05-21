@@ -8,7 +8,6 @@ import {
   Check,
   ClipboardCopy,
   DoorOpen,
-  LayoutList,
   Pencil,
   Lock,
   LogOut,
@@ -21,6 +20,7 @@ import {
   Plus,
   Save,
   Send,
+  Settings,
   ShieldCheck,
   Trash2,
   Upload,
@@ -68,7 +68,7 @@ type CharacterLike = Omit<Partial<Character>, 'characteristics' | 'skills' | 'ba
   skills?: unknown;
   background?: unknown;
 };
-type SceneDraft = Pick<Scene, 'id' | 'title' | 'summary' | 'status' | 'locationName' | 'mapX' | 'mapY' | 'tags' | 'createdBy' | 'roomId' | 'createdAt'>;
+type SceneDraft = Pick<Scene, 'id' | 'title' | 'summary' | 'status' | 'locationName' | 'timeLabel' | 'mapX' | 'mapY' | 'tags' | 'createdBy' | 'roomId' | 'createdAt'>;
 type DerivedCoCValues = ReturnType<typeof deriveCoCValues>;
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
@@ -88,6 +88,7 @@ const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
 ];
 const skillCategories = getSkillCategories();
 const demoUserId = 'demo-user';
+const playerSpeakerId = 'speaker-player';
 
 const defaultCharacteristics: CoCCharacteristics = {
   str: 10,
@@ -128,15 +129,16 @@ export function App() {
   const [messages, setMessages] = useState<RpMessage[]>(demoMessages);
   const [selectedCharacterId, setSelectedCharacterId] = useState(characters[0].id);
   const [selectedSceneId, setSelectedSceneId] = useState(scenes[0].id);
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(demoRooms[0].id);
   const [currentView, setCurrentView] = useState<ViewMode>('room');
-  const [mode, setMode] = useState<'ic' | 'ooc'>('ic');
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageDraft, setEditingMessageDraft] = useState('');
   const [characterDraft, setCharacterDraft] = useState<Character>(demoCharacters[0]);
   const [roomDraft, setRoomDraft] = useState<Room>(demoRooms[0]);
   const [sceneDraft, setSceneDraft] = useState<SceneDraft>(demoScenes[0]);
+  const [isRoomConfigOpen, setIsRoomConfigOpen] = useState(false);
+  const [configuredSceneId, setConfiguredSceneId] = useState<string | null>(null);
   const [sceneMaps, setSceneMaps] = useState<SceneMapRecord[]>([]);
   const sceneMapsRef = useRef<SceneMapRecord[]>([]);
   const [mapPinLabel, setMapPinLabel] = useState('');
@@ -170,9 +172,10 @@ export function App() {
   const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
   const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
   const activeRoom = rooms.find((room) => room.id === selectedRoomId) ?? rooms[0];
+  const roomScenes = scenes.filter((scene) => scene.roomId === activeRoom.id);
   const activeActorId = currentUserId ?? (authState === 'demo' ? demoUserId : null);
   const activeSceneMap = sceneMaps.find((sceneMap) => sceneMap.sceneId === activeRoom.id) ?? null;
-  const scenePins = scenes.filter((scene) => scene.mapX !== null && scene.mapY !== null);
+  const scenePins = roomScenes.filter((scene) => scene.mapX !== null && scene.mapY !== null);
   const activeDerived = deriveCoCValues(characterDraft);
   const selectedMapPin = scenePins.find((scene) => scene.id === selectedMapPinId) ?? activeScene;
   const canManageActiveCharacter =
@@ -182,7 +185,9 @@ export function App() {
     currentAccessRole === 'gm';
   const canEditActiveRoom = authState === 'demo' || activeRoom?.createdBy === currentUserId || currentAccessRole === 'owner';
   const canEditSceneDraft = authState === 'demo' || sceneDraft.createdBy === currentUserId;
-  const recentScenes = scenes.slice(-3).reverse();
+  const recentScenes = roomScenes.slice(-3).reverse();
+  const selectedSpeakerIsPlayer = selectedCharacterId === playerSpeakerId;
+  const messageMode: 'ic' | 'ooc' = selectedSpeakerIsPlayer ? 'ooc' : 'ic';
 
   const groupedMessages = useMemo(
     () =>
@@ -211,6 +216,13 @@ export function App() {
     if (!activeScene) return;
     setSceneDraft(activeScene);
   }, [activeScene?.id]);
+
+  useEffect(() => {
+    const firstScene = scenes.find((scene) => scene.roomId === activeRoom.id);
+    if (firstScene && !scenes.some((scene) => scene.id === selectedSceneId && scene.roomId === activeRoom.id)) {
+      setSelectedSceneId(firstScene.id);
+    }
+  }, [activeRoom?.id, scenes, selectedSceneId]);
 
   useEffect(() => {
     sceneMapsRef.current = sceneMaps;
@@ -348,6 +360,7 @@ export function App() {
         title: '夜明け前の酒場',
         summary: '雨音が屋根を打つ。閉店後の酒場に、まだ灯りがひとつ残っている。',
         location_name: '酒場',
+        time_label: '深夜',
         tags: ['導入', '屋内'],
         status: 'active',
       }),
@@ -426,7 +439,7 @@ export function App() {
     const [{ data: remoteScenes }, remoteCharacters, { data: remoteMessages }] = await Promise.all([
       supabase
         .from('scenes')
-        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
+        .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
         .eq('room_id', firstRoom.id)
         .order('created_at', { ascending: true }),
       fetchCharactersApi(firstRoom.id).catch((error) => {
@@ -544,9 +557,9 @@ export function App() {
         .insert({
           room_id: selectedRoomId,
           scene_id: selectedSceneId,
-          character_id: mode === 'ic' ? activeCharacter.id : null,
+          character_id: messageMode === 'ic' ? activeCharacter.id : null,
           author_id: currentUserId,
-          mode,
+          mode: messageMode,
           body: trimmed,
         })
         .select('id, created_at')
@@ -559,10 +572,10 @@ export function App() {
 
       const remoteMessage: RpMessage = {
         id: data.id,
-        characterId: mode === 'ic' ? activeCharacter.id : null,
+        characterId: messageMode === 'ic' ? activeCharacter.id : null,
         authorId: currentUserId,
-        author: mode === 'ic' ? activeCharacter.name : 'OOC',
-        mode,
+        author: messageMode === 'ic' ? activeCharacter.name : '中の人',
+        mode: messageMode,
         body: trimmed,
         createdAt: new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(
           new Date(data.created_at),
@@ -576,10 +589,10 @@ export function App() {
 
     const nextMessage: RpMessage = {
       id: crypto.randomUUID(),
-      characterId: mode === 'ic' ? activeCharacter.id : null,
+      characterId: messageMode === 'ic' ? activeCharacter.id : null,
       authorId: activeActorId,
-      author: mode === 'ic' ? activeCharacter.name : 'OOC',
-      mode,
+      author: messageMode === 'ic' ? activeCharacter.name : '中の人',
+      mode: messageMode,
       body: trimmed,
       createdAt: new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date()),
     };
@@ -791,23 +804,25 @@ export function App() {
   }
 
   async function handleCreateScene() {
-    const nextScene = createDefaultScene(selectedRoomId ?? activeRoom.id, activeActorId);
+    const targetRoomId = activeRoom.id;
+    const nextScene = createDefaultScene(targetRoomId, activeActorId);
 
-    if (supabase && authState === 'allowed' && selectedRoomId && currentUserId) {
+    if (supabase && authState === 'allowed' && targetRoomId && currentUserId) {
       const { data, error } = await supabase
         .from('scenes')
         .insert({
-          room_id: selectedRoomId,
+          room_id: targetRoomId,
           created_by: currentUserId,
           title: nextScene.title,
           summary: nextScene.summary,
           status: nextScene.status,
           location_name: nextScene.locationName,
+          time_label: nextScene.timeLabel,
           map_x: nextScene.mapX,
           map_y: nextScene.mapY,
           tags: nextScene.tags,
         })
-        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
+        .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
         .single();
 
       if (error) {
@@ -818,6 +833,7 @@ export function App() {
       setScenes((current) => [...current, created]);
       setSelectedSceneId(created.id);
       setSceneDraft(created);
+      setConfiguredSceneId(created.id);
       setCurrentView('scenes');
       return;
     }
@@ -825,6 +841,7 @@ export function App() {
     setScenes((current) => [...current, nextScene]);
     setSelectedSceneId(nextScene.id);
     setSceneDraft(nextScene);
+    setConfiguredSceneId(nextScene.id);
     setCurrentView('scenes');
   }
 
@@ -841,13 +858,14 @@ export function App() {
           summary: nextScene.summary,
           status: nextScene.status,
           location_name: nextScene.locationName,
+          time_label: nextScene.timeLabel,
           map_x: nextScene.mapX,
           map_y: nextScene.mapY,
           tags: nextScene.tags,
         })
         .eq('id', nextScene.id)
         .eq('created_by', currentUserId)
-        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
+        .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
         .single();
 
       if (error) {
@@ -874,7 +892,7 @@ export function App() {
         .update({ map_x: x, map_y: y, location_name: nextScene.locationName })
         .eq('id', scene.id)
         .eq('created_by', currentUserId)
-        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
+        .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
         .single();
 
       if (error) {
@@ -975,20 +993,15 @@ export function App() {
           </span>
           <div className="topbar-tabs" aria-label="表示切り替え">
             <button
-              className={currentView === 'room' ? 'topbar-tab active' : 'topbar-tab'}
+              className={currentView === 'rooms' ? 'topbar-tab active' : 'topbar-tab'}
               type="button"
-              onClick={() => setCurrentView('room')}
+              onClick={() => {
+                setIsRoomConfigOpen(false);
+                setCurrentView('rooms');
+              }}
             >
               <MessageSquareText size={16} />
               ルーム
-            </button>
-            <button
-              className={currentView === 'rooms' ? 'topbar-tab active' : 'topbar-tab'}
-              type="button"
-              onClick={() => setCurrentView('rooms')}
-            >
-              <LayoutList size={16} />
-              ルーム管理
             </button>
             <button
               className={currentView === 'scenes' ? 'topbar-tab active' : 'topbar-tab'}
@@ -1022,80 +1035,129 @@ export function App() {
       </header>
 
       {currentView === 'rooms' ? (
-        <section className="management-page" aria-label="ルーム管理">
+        <section className="management-page" aria-label="ルームメニュー">
           <div className="my-page-header">
             <div>
               <p>Room Menu</p>
-              <h1>ルーム管理</h1>
+              <h1>ルーム</h1>
             </div>
           </div>
           <div className="management-grid">
             <aside className="character-manager-list" aria-label="ルーム一覧">
               <div className="section-title">
-                <LayoutList size={16} />
+                <MessageSquareText size={16} />
                 ルーム一覧
               </div>
               <div className="scene-list">
                 {rooms.map((room) => (
-                  <button
+                  <div
                     className={room.id === activeRoom.id ? 'scene-item selected' : 'scene-item'}
                     key={room.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedRoomId(room.id);
-                      setRoomDraft(room);
-                    }}
                   >
                     <span>{room.title}</span>
                     <small>{room.tags.join(', ') || 'no tags'}</small>
-                  </button>
+                    <div className="inline-actions">
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoomId(room.id);
+                          setRoomDraft(room);
+                          setCurrentView('room');
+                        }}
+                      >
+                        入室
+                      </button>
+                      <button
+                        className="mini-icon-button"
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoomId(room.id);
+                          setRoomDraft(room);
+                          setIsRoomConfigOpen((open) => (room.id === activeRoom.id ? !open : true));
+                        }}
+                        aria-label="ルーム設定"
+                      >
+                        <Settings size={15} />
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </aside>
-            <form className="tool-panel" onSubmit={handleSaveRoom}>
-              <div className="tool-panel-header">
-                <div>
-                  <p>Room Detail</p>
-                  <h2>{roomDraft.title}</h2>
+            {isRoomConfigOpen ? (
+              <form className="tool-panel" onSubmit={handleSaveRoom}>
+                <div className="tool-panel-header">
+                  <div>
+                    <p>Room Detail</p>
+                    <h2>{roomDraft.title}</h2>
+                  </div>
+                  <button className="button-primary" type="submit" disabled={!canEditActiveRoom}>
+                    <Save size={16} />
+                    保存
+                  </button>
                 </div>
-                <button className="button-primary" type="submit" disabled={!canEditActiveRoom}>
-                  <Save size={16} />
-                  保存
-                </button>
-              </div>
-              <div className="field-grid two">
-                <label>
-                  ルーム名
-                  <input
-                    value={roomDraft.title}
-                    onChange={(event) => setRoomDraft({ ...roomDraft, title: event.target.value })}
+                <div className="field-grid two">
+                  <label>
+                    ルーム名
+                    <input
+                      value={roomDraft.title}
+                      onChange={(event) => setRoomDraft({ ...roomDraft, title: event.target.value })}
+                      disabled={!canEditActiveRoom}
+                    />
+                  </label>
+                  <label>
+                    タグ
+                    <input
+                      value={roomDraft.tags.join(', ')}
+                      onChange={(event) => setRoomDraft({ ...roomDraft, tags: parseTags(event.target.value) })}
+                      disabled={!canEditActiveRoom}
+                      placeholder="導入, 1920s, 雨"
+                    />
+                  </label>
+                </div>
+                <label className="full-label">
+                  概要
+                  <textarea
+                    value={roomDraft.summary}
+                    onChange={(event) => setRoomDraft({ ...roomDraft, summary: event.target.value })}
                     disabled={!canEditActiveRoom}
                   />
                 </label>
-                <label>
-                  タグ
-                  <input
-                    value={roomDraft.tags.join(', ')}
-                    onChange={(event) => setRoomDraft({ ...roomDraft, tags: parseTags(event.target.value) })}
-                    disabled={!canEditActiveRoom}
-                    placeholder="導入, 1920s, 雨"
-                  />
-                </label>
-              </div>
-              <label className="full-label">
-                概要
-                <textarea
-                  value={roomDraft.summary}
-                  onChange={(event) => setRoomDraft({ ...roomDraft, summary: event.target.value })}
-                  disabled={!canEditActiveRoom}
-                />
-              </label>
-              <div className="tag-row">
-                {roomDraft.tags.map((tag) => (
-                  <span className="access-chip" key={tag}>{tag}</span>
-                ))}
-              </div>
-            </form>
+                <div className="tag-row">
+                  {roomDraft.tags.map((tag) => (
+                    <span className="access-chip" key={tag}>{tag}</span>
+                  ))}
+                </div>
+              </form>
+            ) : (
+              <section className="tool-panel">
+                <div className="tool-panel-header">
+                  <div>
+                    <p>Room Scenes</p>
+                    <h2>{activeRoom.title}</h2>
+                  </div>
+                  <button className="button-primary" type="button" onClick={() => setCurrentView('room')}>
+                    <MessageSquareText size={16} />
+                    入室
+                  </button>
+                </div>
+                <p className="muted">{activeRoom.summary}</p>
+                <div className="scene-list">
+                  {roomScenes.map((scene) => (
+                    <button
+                      className={scene.id === selectedSceneId ? 'scene-item selected' : 'scene-item'}
+                      key={scene.id}
+                      type="button"
+                      onClick={() => setSelectedSceneId(scene.id)}
+                    >
+                      <span>{scene.title}</span>
+                      <small>{scene.locationName || '場所未設定'} / {scene.timeLabel || '時間未設定'}</small>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </section>
       ) : currentView === 'scenes' ? (
@@ -1114,118 +1176,190 @@ export function App() {
             <aside className="character-manager-list" aria-label="シーン一覧">
               <div className="section-title">
                 <BookOpen size={16} />
-                シーン一覧
+                {activeRoom.title}
               </div>
+              <select
+                className="rail-select"
+                value={activeRoom.id}
+                onChange={(event) => {
+                  setSelectedRoomId(event.target.value);
+                  setConfiguredSceneId(null);
+                }}
+              >
+                {rooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.title}
+                  </option>
+                ))}
+              </select>
               <div className="scene-list">
-                {scenes.map((scene) => (
-                  <button
+                {roomScenes.map((scene) => (
+                  <div
                     className={scene.id === selectedSceneId ? 'scene-item selected' : 'scene-item'}
                     key={scene.id}
-                    type="button"
-                    onClick={() => setSelectedSceneId(scene.id)}
                   >
                     <span>{scene.title}</span>
                     <small>{scene.locationName || '場所未設定'} / {scene.tags.join(', ') || 'no tags'}</small>
-                  </button>
+                    <div className="inline-actions">
+                      <button className="button-secondary" type="button" onClick={() => setSelectedSceneId(scene.id)}>
+                        表示
+                      </button>
+                      {scene.createdBy === activeActorId && (
+                        <button
+                          className="mini-icon-button"
+                          type="button"
+                          onClick={() => {
+                            setSelectedSceneId(scene.id);
+                            setConfiguredSceneId(scene.id);
+                          }}
+                          aria-label="シーン設定"
+                        >
+                          <Settings size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </aside>
-            <form className="tool-panel" onSubmit={handleSaveScene}>
-              <div className="tool-panel-header">
-                <div>
-                  <p>Scene Detail</p>
-                  <h2>{sceneDraft.title}</h2>
+            {configuredSceneId === sceneDraft.id && canEditSceneDraft ? (
+              <form className="tool-panel" onSubmit={handleSaveScene}>
+                <div className="tool-panel-header">
+                  <div>
+                    <p>Scene Detail</p>
+                    <h2>{sceneDraft.title}</h2>
+                  </div>
+                  <button className="button-primary" type="submit" disabled={!canEditSceneDraft}>
+                    <Save size={16} />
+                    保存
+                  </button>
                 </div>
-                <button className="button-primary" type="submit" disabled={!canEditSceneDraft}>
-                  <Save size={16} />
-                  保存
-                </button>
-              </div>
-              {!canEditSceneDraft && <p className="muted">このシーンは作成者のみ編集できます。</p>}
-              <div className="field-grid two">
-                <label>
-                  シーン名
-                  <input
-                    value={sceneDraft.title}
-                    onChange={(event) => setSceneDraft({ ...sceneDraft, title: event.target.value })}
+                {!canEditSceneDraft && <p className="muted">このシーンは作成者のみ編集できます。</p>}
+                <div className="field-grid two">
+                  <label>
+                    シーン名
+                    <input
+                      value={sceneDraft.title}
+                      onChange={(event) => setSceneDraft({ ...sceneDraft, title: event.target.value })}
+                      disabled={!canEditSceneDraft}
+                    />
+                  </label>
+                  <label>
+                    場所
+                    <input
+                      value={sceneDraft.locationName}
+                      onChange={(event) => setSceneDraft({ ...sceneDraft, locationName: event.target.value })}
+                      disabled={!canEditSceneDraft}
+                      placeholder="酒場、港の倉庫街など"
+                    />
+                  </label>
+                  <label>
+                    時間
+                    <input
+                      value={sceneDraft.timeLabel}
+                      onChange={(event) => setSceneDraft({ ...sceneDraft, timeLabel: event.target.value })}
+                      disabled={!canEditSceneDraft}
+                      placeholder="深夜、翌朝、1923年春など"
+                    />
+                  </label>
+                  <label>
+                    状態
+                    <select
+                      value={sceneDraft.status}
+                      onChange={(event) =>
+                        setSceneDraft({ ...sceneDraft, status: event.target.value as Scene['status'] })
+                      }
+                      disabled={!canEditSceneDraft}
+                    >
+                      <option value="active">active</option>
+                      <option value="paused">paused</option>
+                      <option value="archived">archived</option>
+                    </select>
+                  </label>
+                  <label>
+                    タグ
+                    <input
+                      value={sceneDraft.tags.join(', ')}
+                      onChange={(event) => setSceneDraft({ ...sceneDraft, tags: parseTags(event.target.value) })}
+                      disabled={!canEditSceneDraft}
+                      placeholder="探索, 屋内, 重要"
+                    />
+                  </label>
+                </div>
+                <div className="field-grid two">
+                  <label>
+                    マップX
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={sceneDraft.mapX ?? ''}
+                      onChange={(event) =>
+                        setSceneDraft({ ...sceneDraft, mapX: event.target.value === '' ? null : Number(event.target.value) })
+                      }
+                      disabled={!canEditSceneDraft}
+                    />
+                  </label>
+                  <label>
+                    マップY
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={sceneDraft.mapY ?? ''}
+                      onChange={(event) =>
+                        setSceneDraft({ ...sceneDraft, mapY: event.target.value === '' ? null : Number(event.target.value) })
+                      }
+                      disabled={!canEditSceneDraft}
+                    />
+                  </label>
+                </div>
+                <label className="full-label">
+                  概要
+                  <textarea
+                    value={sceneDraft.summary}
+                    onChange={(event) => setSceneDraft({ ...sceneDraft, summary: event.target.value })}
                     disabled={!canEditSceneDraft}
                   />
                 </label>
-                <label>
-                  場所
-                  <input
-                    value={sceneDraft.locationName}
-                    onChange={(event) => setSceneDraft({ ...sceneDraft, locationName: event.target.value })}
-                    disabled={!canEditSceneDraft}
-                    placeholder="酒場、港の倉庫街など"
-                  />
-                </label>
-                <label>
-                  状態
-                  <select
-                    value={sceneDraft.status}
-                    onChange={(event) =>
-                      setSceneDraft({ ...sceneDraft, status: event.target.value as Scene['status'] })
-                    }
-                    disabled={!canEditSceneDraft}
-                  >
-                    <option value="active">active</option>
-                    <option value="paused">paused</option>
-                    <option value="archived">archived</option>
-                  </select>
-                </label>
-                <label>
-                  タグ
-                  <input
-                    value={sceneDraft.tags.join(', ')}
-                    onChange={(event) => setSceneDraft({ ...sceneDraft, tags: parseTags(event.target.value) })}
-                    disabled={!canEditSceneDraft}
-                    placeholder="探索, 屋内, 重要"
-                  />
-                </label>
-              </div>
-              <div className="field-grid two">
-                <label>
-                  マップX
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={sceneDraft.mapX ?? ''}
-                    onChange={(event) =>
-                      setSceneDraft({ ...sceneDraft, mapX: event.target.value === '' ? null : Number(event.target.value) })
-                    }
-                    disabled={!canEditSceneDraft}
-                  />
-                </label>
-                <label>
-                  マップY
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={sceneDraft.mapY ?? ''}
-                    onChange={(event) =>
-                      setSceneDraft({ ...sceneDraft, mapY: event.target.value === '' ? null : Number(event.target.value) })
-                    }
-                    disabled={!canEditSceneDraft}
-                  />
-                </label>
-              </div>
-              <label className="full-label">
-                概要
-                <textarea
-                  value={sceneDraft.summary}
-                  onChange={(event) => setSceneDraft({ ...sceneDraft, summary: event.target.value })}
-                  disabled={!canEditSceneDraft}
-                />
-              </label>
-              <div className="tag-row">
-                {sceneDraft.tags.map((tag) => (
-                  <span className="access-chip" key={tag}>{tag}</span>
-                ))}
-              </div>
-            </form>
+                <div className="tag-row">
+                  {sceneDraft.tags.map((tag) => (
+                    <span className="access-chip" key={tag}>{tag}</span>
+                  ))}
+                </div>
+              </form>
+            ) : (
+              <section className="tool-panel">
+                <div className="tool-panel-header">
+                  <div>
+                    <p>Scene Detail</p>
+                    <h2>{activeScene.title}</h2>
+                  </div>
+                  {activeScene.createdBy === activeActorId && (
+                    <button className="button-secondary" type="button" onClick={() => setConfiguredSceneId(activeScene.id)}>
+                      <Settings size={16} />
+                      設定
+                    </button>
+                  )}
+                </div>
+                <div className="field-grid two">
+                  <div className="read-field">
+                    <span>場所</span>
+                    <strong>{activeScene.locationName || '未設定'}</strong>
+                  </div>
+                  <div className="read-field">
+                    <span>時間</span>
+                    <strong>{activeScene.timeLabel || '未設定'}</strong>
+                  </div>
+                </div>
+                <p>{activeScene.summary || '概要はまだありません。'}</p>
+                <div className="tag-row">
+                  {activeScene.tags.map((tag) => (
+                    <span className="access-chip" key={tag}>{tag}</span>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </section>
       ) : currentView === 'my-page' ? (
@@ -1521,32 +1655,16 @@ export function App() {
             {authMessage && authState === 'allowed' && <p className="composer-notice">{authMessage}</p>}
             <div className="composer-controls">
               <select value={selectedCharacterId} onChange={(event) => setSelectedCharacterId(event.target.value)}>
+                <option value={playerSpeakerId}>中の人</option>
                 {characters.map((character) => (
                   <option key={character.id} value={character.id}>
                     {character.name}
                   </option>
                 ))}
               </select>
-              <div className="segmented" aria-label="投稿モード">
-                <button
-                  className={mode === 'ic' ? 'active' : ''}
-                  type="button"
-                  onClick={() => setMode('ic')}
-                  title="In Character: キャラクターとしての発言"
-                >
-                  IC
-                </button>
-                <button
-                  className={mode === 'ooc' ? 'active' : ''}
-                  type="button"
-                  onClick={() => setMode('ooc')}
-                  title="Out Of Character: プレイヤーとしての相談・確認"
-                >
-                  OOC
-                </button>
-              </div>
+              <span className="access-chip">{messageMode === 'ic' ? 'キャラクター発言' : '中の人'}</span>
             </div>
-            <p className="mode-help">ICはキャラクター発言、OOCはプレイヤー同士の相談です。</p>
+            <p className="mode-help">キャラ名を選ぶとキャラクター発言、中の人を選ぶとプレイヤー発言です。</p>
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -1954,6 +2072,7 @@ function rowToScene(scene: {
   status?: string | null;
   summary?: string | null;
   location_name?: string | null;
+  time_label?: string | null;
   map_x?: number | string | null;
   map_y?: number | string | null;
   tags?: string[] | null;
@@ -1967,6 +2086,7 @@ function rowToScene(scene: {
     status: scene.status === 'paused' || scene.status === 'archived' ? scene.status : 'active',
     summary: scene.summary ?? '',
     locationName: scene.location_name ?? '',
+    timeLabel: scene.time_label ?? '',
     mapX: toMapCoordinate(scene.map_x),
     mapY: toMapCoordinate(scene.map_y),
     tags: normalizeTags(scene.tags),
@@ -2064,6 +2184,7 @@ function createDefaultScene(roomId: string | null, creatorId: string | null): Sc
     status: 'active',
     summary: '',
     locationName: '',
+    timeLabel: '',
     mapX: null,
     mapY: null,
     tags: [],
@@ -2080,6 +2201,7 @@ function normalizeScene(scene: SceneDraft): Scene {
     status: scene.status,
     summary: scene.summary.trim(),
     locationName: scene.locationName.trim(),
+    timeLabel: scene.timeLabel.trim(),
     mapX: toMapCoordinate(scene.mapX),
     mapY: toMapCoordinate(scene.mapY),
     tags: normalizeTags(scene.tags),
