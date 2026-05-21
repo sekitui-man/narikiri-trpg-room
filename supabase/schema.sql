@@ -31,9 +31,11 @@ create table if not exists public.rooms (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   summary text not null default '',
+  tags text[] not null default '{}',
   created_by uuid not null references public.profiles(id) on delete restrict,
   created_at timestamptz not null default now()
 );
+alter table public.rooms add column if not exists tags text[] not null default '{}';
 
 create table if not exists public.room_members (
   room_id uuid not null references public.rooms(id) on delete cascade,
@@ -88,11 +90,26 @@ alter table public.characters add column if not exists is_archived boolean not n
 create table if not exists public.scenes (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
+  created_by uuid references public.profiles(id) on delete set null,
   title text not null,
   summary text not null default '',
+  location_name text not null default '',
+  map_x numeric check (map_x is null or (map_x >= 0 and map_x <= 100)),
+  map_y numeric check (map_y is null or (map_y >= 0 and map_y <= 100)),
+  tags text[] not null default '{}',
   status text not null default 'active' check (status in ('active', 'paused', 'archived')),
   created_at timestamptz not null default now()
 );
+alter table public.scenes add column if not exists created_by uuid references public.profiles(id) on delete set null;
+alter table public.scenes add column if not exists location_name text not null default '';
+alter table public.scenes add column if not exists map_x numeric check (map_x is null or (map_x >= 0 and map_x <= 100));
+alter table public.scenes add column if not exists map_y numeric check (map_y is null or (map_y >= 0 and map_y <= 100));
+alter table public.scenes add column if not exists tags text[] not null default '{}';
+update public.scenes scene
+set created_by = room.created_by
+from public.rooms room
+where scene.room_id = room.id
+  and scene.created_by is null;
 
 create table if not exists public.rp_messages (
   id uuid primary key default gen_random_uuid(),
@@ -422,6 +439,8 @@ on public.scenes
 for insert
 to authenticated
 with check (
+  created_by = (select auth.uid())
+  and
   exists (
     select 1 from public.room_members member
     where member.room_id = scenes.room_id
@@ -430,25 +449,18 @@ with check (
   )
 );
 
-create policy "Room owners and GMs can update scenes"
+drop policy if exists "Room owners and GMs can update scenes" on public.scenes;
+create policy "Scene creators can update scenes"
 on public.scenes
 for update
 to authenticated
 using (
-  exists (
-    select 1 from public.room_members member
-    where member.room_id = scenes.room_id
-      and member.user_id = (select auth.uid())
-      and member.role in ('owner', 'gm')
-  )
+  app_private.is_room_member(room_id)
+  and created_by = (select auth.uid())
 )
 with check (
-  exists (
-    select 1 from public.room_members member
-    where member.room_id = scenes.room_id
-      and member.user_id = (select auth.uid())
-      and member.role in ('owner', 'gm')
-  )
+  app_private.is_room_member(room_id)
+  and created_by = (select auth.uid())
 );
 
 create policy "Room owners and GMs can delete scenes"
@@ -497,6 +509,7 @@ create index if not exists characters_room_id_idx on public.characters(room_id);
 create index if not exists characters_owner_id_idx on public.characters(owner_id);
 create index if not exists characters_room_id_is_archived_idx on public.characters(room_id, is_archived);
 create index if not exists scenes_room_id_idx on public.scenes(room_id);
+create index if not exists scenes_created_by_idx on public.scenes(created_by);
 create index if not exists rp_messages_room_id_created_at_idx on public.rp_messages(room_id, created_at);
 create index if not exists rp_messages_scene_id_idx on public.rp_messages(scene_id);
 create index if not exists rp_messages_character_id_idx on public.rp_messages(character_id);

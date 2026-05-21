@@ -1,4 +1,4 @@
-import type { Character, RpMessage, Scene } from './types';
+import type { Character, Room, RpMessage, Scene } from './types';
 import { createSkillMap } from './cocSkills';
 
 const demoStats = {
@@ -100,18 +100,42 @@ export const demoCharacters: Character[] = [
   },
 ];
 
+export const demoRooms: Room[] = [
+  {
+    id: 'room-demo',
+    title: '夜明け前の酒場',
+    summary: '雨の街を舞台にした導入ルーム。酒場、港、古い倉庫が主な探索範囲。',
+    tags: ['導入', '1920s', '雨'],
+    createdBy: 'demo-user',
+  },
+];
+
 export const demoScenes: Scene[] = [
   {
     id: 'tavern',
+    roomId: 'room-demo',
+    createdBy: 'demo-user',
     title: '夜明け前の酒場',
     status: 'active',
     summary: '雨音が屋根を打つ。閉店後の酒場に、まだ灯りがひとつ残っている。',
+    locationName: '酒場',
+    mapX: 35,
+    mapY: 42,
+    tags: ['導入', '屋内'],
+    createdAt: '2026-05-14T14:30:00.000Z',
   },
   {
     id: 'archive',
+    roomId: 'room-demo',
+    createdBy: 'demo-guest',
     title: '港の倉庫街',
     status: 'paused',
     summary: '前回、黒い封蝋の手紙が発見された。',
+    locationName: '港の倉庫街',
+    mapX: 68,
+    mapY: 66,
+    tags: ['探索', '屋外'],
+    createdAt: '2026-05-14T14:40:00.000Z',
   },
 ];
 

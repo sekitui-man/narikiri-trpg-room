@@ -56,11 +56,26 @@ export type Character = {
   isArchived: boolean;
 };
 
+export type Room = {
+  id: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  createdBy: string | null;
+};
+
 export type Scene = {
   id: string;
+  roomId: string | null;
+  createdBy: string | null;
   title: string;
   status: 'active' | 'paused' | 'archived';
   summary: string;
+  locationName: string;
+  mapX: number | null;
+  mapY: number | null;
+  tags: string[];
+  createdAt: string | null;
 };
 
 export type RpMessage = {

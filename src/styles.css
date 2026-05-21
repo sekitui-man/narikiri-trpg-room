@@ -290,6 +290,12 @@ select:focus {
   padding: 44px 32px;
 }
 
+.management-page {
+  width: min(100%, 1220px);
+  margin: 0 auto;
+  padding: 44px 32px;
+}
+
 .my-page-header {
   display: flex;
   align-items: flex-end;
@@ -324,6 +330,13 @@ select:focus {
   align-items: start;
 }
 
+.management-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
 .character-manager-list {
   position: sticky;
   top: 26px;
@@ -347,6 +360,17 @@ select:focus {
   border-radius: 8px;
   padding: 16px;
   background: var(--surface);
+}
+
+.tool-panel label,
+.full-label {
+  display: grid;
+  gap: 6px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .tool-panel-header {
@@ -476,6 +500,12 @@ select:focus {
   font-size: 13px;
   line-height: 20px;
   font-weight: 400;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .left-rail,
@@ -1052,7 +1082,8 @@ select:focus {
   }
 
   .my-page,
-  .tools-page {
+  .tools-page,
+  .management-page {
     padding: 26px 16px;
   }
 
@@ -1063,6 +1094,10 @@ select:focus {
   }
 
   .character-manager {
+    grid-template-columns: 1fr;
+  }
+
+  .management-grid {
     grid-template-columns: 1fr;
   }
 

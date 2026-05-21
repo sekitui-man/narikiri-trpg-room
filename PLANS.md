@@ -18,8 +18,11 @@
 - Text-based RP timeline.
 - Character selection and IC/OOC posting mode.
 - Scene memo panel and My Page character management.
+- Room and scene menu screens with tags.
+- Scenes store location information and can be pinned on the room map.
+- Scene creators may edit only their own scenes.
 - Internal CoC 6th edition investigator database with per-user character ownership.
-- World support tools for scene-linked local map image annotation and session log formatting.
+- World support tools for room map image annotation and session log formatting.
 - Message authors may edit or delete only their own RP messages.
 - Cloudflare Pages Functions boundary for character CRUD.
 - Supabase SQL schema with RLS policies for invited room members.

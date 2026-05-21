@@ -28,3 +28,4 @@
 - Moved character creation/editing out of the room memo panel into a My Page character manager with character list and new-character flow.
 - Replaced free-form skill entry with a fixed CoC 6th edition skill table and added client-side map annotation plus log formatting tools.
 - Linked local maps to scenes, added author-only message edit/delete controls, and documented IC/OOC meaning in the composer.
+- Added room and scene menu screens, scene tags/location/map coordinates, recent-scene sidebar behavior, and creator-only scene editing.

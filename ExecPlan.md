@@ -32,7 +32,9 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Pages Functions must strictly validate character payload fields, types, string lengths, and numeric ranges. Client-supplied `room_id`, `owner_id`, `is_archived`, and timestamps are not trusted.
 - Character creation and editing belong in My Page, with a character list followed by a sheet editor. The room view only selects existing characters for posting and keeps the right panel for scene memo content.
 - CoC 6th edition skills are edited from a fixed skill list with base, occupation, interest, growth, other, and total columns. Free-form skill text areas are not used.
-- Alpha world-support tools are client-side only: uploaded map images and pins are linked to selected scenes but remain local to the browser session, while log formatting derives from visible room messages without changing stored message data.
+- Alpha world-support tools are client-side only: uploaded room map images remain local to the browser session, while scenes store location coordinates and render as pins on the room map.
+- Scenes carry title, summary, status, location, map coordinates, tags, and creator id. Scene creation is available from the scene menu; scene updates are creator-only.
+- The room menu owns room title, summary, and tags. The room sidebar only shows recent scenes and links to the full scene menu.
 - RP message editing and deletion are author-only operations. The UI only exposes controls for the current user's messages, and RLS restricts update/delete to rows where `author_id = auth.uid()`.
 - IC means In Character: character speech/action. OOC means Out Of Character: player-side discussion, confirmation, or logistics.
 

@@ -8,6 +8,7 @@ import {
   Check,
   ClipboardCopy,
   DoorOpen,
+  LayoutList,
   Pencil,
   Lock,
   LogOut,
@@ -43,26 +44,16 @@ import {
   updateCharacterApi,
   type CharacterRow,
 } from './characterApi';
-import { demoCharacters, demoMessages, demoScenes } from './demoData';
-import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSkillMap, RpMessage, Scene } from './types';
+import { demoCharacters, demoMessages, demoRooms, demoScenes } from './demoData';
+import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSkillMap, Room, RpMessage, Scene } from './types';
 
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
-type ViewMode = 'room' | 'my-page' | 'tools';
+type ViewMode = 'room' | 'rooms' | 'scenes' | 'my-page' | 'tools';
 type LogFormat = 'chat' | 'script' | 'markdown';
 type SceneMapRecord = {
   sceneId: string;
   imageUrl: string;
-};
-type MapPinRecord = {
-  id: string;
-  sceneId: string;
-  x: number;
-  y: number;
-  label: string;
-  characterName: string;
-  sceneTitle: string;
-  createdAt: string;
 };
 type AllowedMember = {
   email?: string | null;
@@ -77,6 +68,7 @@ type CharacterLike = Omit<Partial<Character>, 'characteristics' | 'skills' | 'ba
   skills?: unknown;
   background?: unknown;
 };
+type SceneDraft = Pick<Scene, 'id' | 'title' | 'summary' | 'status' | 'locationName' | 'mapX' | 'mapY' | 'tags' | 'createdBy' | 'roomId' | 'createdAt'>;
 type DerivedCoCValues = ReturnType<typeof deriveCoCValues>;
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
@@ -130,6 +122,7 @@ export function App() {
   const [currentAccessRole, setCurrentAccessRole] = useState<AccessRole | null>(null);
   const [isMagicLinkSending, setIsMagicLinkSending] = useState(false);
   const [magicLinkCooldown, setMagicLinkCooldown] = useState(0);
+  const [rooms, setRooms] = useState<Room[]>(demoRooms);
   const [characters, setCharacters] = useState<Character[]>(demoCharacters);
   const [scenes, setScenes] = useState<Scene[]>(demoScenes);
   const [messages, setMessages] = useState<RpMessage[]>(demoMessages);
@@ -142,9 +135,10 @@ export function App() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageDraft, setEditingMessageDraft] = useState('');
   const [characterDraft, setCharacterDraft] = useState<Character>(demoCharacters[0]);
+  const [roomDraft, setRoomDraft] = useState<Room>(demoRooms[0]);
+  const [sceneDraft, setSceneDraft] = useState<SceneDraft>(demoScenes[0]);
   const [sceneMaps, setSceneMaps] = useState<SceneMapRecord[]>([]);
   const sceneMapsRef = useRef<SceneMapRecord[]>([]);
-  const [mapPins, setMapPins] = useState<MapPinRecord[]>([]);
   const [mapPinLabel, setMapPinLabel] = useState('');
   const [selectedMapPinId, setSelectedMapPinId] = useState<string | null>(null);
   const [logFormat, setLogFormat] = useState<LogFormat>('chat');
@@ -175,17 +169,20 @@ export function App() {
 
   const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
   const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
+  const activeRoom = rooms.find((room) => room.id === selectedRoomId) ?? rooms[0];
   const activeActorId = currentUserId ?? (authState === 'demo' ? demoUserId : null);
-  const activeSceneMap = sceneMaps.find((sceneMap) => sceneMap.sceneId === selectedSceneId) ?? null;
-  const activeScenePins = mapPins.filter((pin) => pin.sceneId === selectedSceneId);
+  const activeSceneMap = sceneMaps.find((sceneMap) => sceneMap.sceneId === activeRoom.id) ?? null;
+  const scenePins = scenes.filter((scene) => scene.mapX !== null && scene.mapY !== null);
   const activeDerived = deriveCoCValues(characterDraft);
-  const selectedMapPin =
-    activeScenePins.find((pin) => pin.id === selectedMapPinId) ?? activeScenePins[activeScenePins.length - 1] ?? null;
+  const selectedMapPin = scenePins.find((scene) => scene.id === selectedMapPinId) ?? activeScene;
   const canManageActiveCharacter =
     authState === 'demo' ||
     characterDraft.ownerId === currentUserId ||
     currentAccessRole === 'owner' ||
     currentAccessRole === 'gm';
+  const canEditActiveRoom = authState === 'demo' || activeRoom?.createdBy === currentUserId || currentAccessRole === 'owner';
+  const canEditSceneDraft = authState === 'demo' || sceneDraft.createdBy === currentUserId;
+  const recentScenes = scenes.slice(-3).reverse();
 
   const groupedMessages = useMemo(
     () =>
@@ -204,6 +201,16 @@ export function App() {
     if (!activeCharacter) return;
     setCharacterDraft(activeCharacter);
   }, [activeCharacter?.id]);
+
+  useEffect(() => {
+    if (!activeRoom) return;
+    setRoomDraft(activeRoom);
+  }, [activeRoom?.id]);
+
+  useEffect(() => {
+    if (!activeScene) return;
+    setSceneDraft(activeScene);
+  }, [activeScene?.id]);
 
   useEffect(() => {
     sceneMapsRef.current = sceneMaps;
@@ -337,8 +344,11 @@ export function App() {
     await Promise.all([
       supabase.from('scenes').insert({
         room_id: room.id,
+        created_by: userId,
         title: '夜明け前の酒場',
         summary: '雨音が屋根を打つ。閉店後の酒場に、まだ灯りがひとつ残っている。',
+        location_name: '酒場',
+        tags: ['導入', '屋内'],
         status: 'active',
       }),
       supabase.from('characters').insert([
@@ -393,7 +403,7 @@ export function App() {
 
     const { data: rooms, error: roomsError } = await supabase
       .from('rooms')
-      .select('id, title, summary')
+      .select('id, title, summary, tags, created_by')
       .order('created_at', { ascending: true })
       .limit(1);
 
@@ -409,11 +419,14 @@ export function App() {
     }
 
     setSelectedRoomId(firstRoom.id);
+    const mappedRooms = rooms.map(rowToRoom);
+    setRooms(mappedRooms);
+    setRoomDraft(mappedRooms[0]);
 
     const [{ data: remoteScenes }, remoteCharacters, { data: remoteMessages }] = await Promise.all([
       supabase
         .from('scenes')
-        .select('id, title, status, summary')
+        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
         .eq('room_id', firstRoom.id)
         .order('created_at', { ascending: true }),
       fetchCharactersApi(firstRoom.id).catch((error) => {
@@ -429,8 +442,10 @@ export function App() {
     ]);
 
     if (remoteScenes?.length) {
-      setScenes(remoteScenes as Scene[]);
-      setSelectedSceneId(remoteScenes[0].id);
+      const mappedScenes = remoteScenes.map(rowToScene);
+      setScenes(mappedScenes);
+      setSelectedSceneId(mappedScenes[0].id);
+      setSceneDraft(mappedScenes[0]);
     }
 
     if (remoteCharacters?.length) {
@@ -687,10 +702,9 @@ export function App() {
     const nextUrl = URL.createObjectURL(file);
     if (activeSceneMap?.imageUrl.startsWith('blob:')) URL.revokeObjectURL(activeSceneMap.imageUrl);
     setSceneMaps((current) => [
-      ...current.filter((sceneMap) => sceneMap.sceneId !== selectedSceneId),
-      { sceneId: selectedSceneId, imageUrl: nextUrl },
+      ...current.filter((sceneMap) => sceneMap.sceneId !== activeRoom.id),
+      { sceneId: activeRoom.id, imageUrl: nextUrl },
     ]);
-    setMapPins((current) => current.filter((pin) => pin.sceneId !== selectedSceneId));
     setSelectedMapPinId(null);
     event.target.value = '';
   }
@@ -699,23 +713,16 @@ export function App() {
     if (!activeSceneMap) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
-    const nextPin: MapPinRecord = {
-      id: crypto.randomUUID(),
-      sceneId: selectedSceneId,
-      x: ((event.clientX - rect.left) / rect.width) * 100,
-      y: ((event.clientY - rect.top) / rect.height) * 100,
-      label: mapPinLabel.trim() || `${activeScene.title} / ${activeCharacter.name}`,
-      characterName: activeCharacter.name,
-      sceneTitle: activeScene.title,
-      createdAt: new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date()),
-    };
-    setMapPins((current) => [...current, nextPin]);
-    setSelectedMapPinId(nextPin.id);
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    void assignSceneLocation(activeScene, x, y, mapPinLabel.trim());
+    setSelectedMapPinId(activeScene.id);
     setMapPinLabel('');
   }
 
-  function handleUseMapPin(pin: MapPinRecord) {
-    setDraft((current) => `${current ? `${current}\n` : ''}@${pin.label} `);
+  function handleUseMapPin(scene: Scene) {
+    setDraft((current) => `${current ? `${current}\n` : ''}@${scene.locationName || scene.title} `);
+    setSelectedSceneId(scene.id);
     setCurrentView('room');
   }
 
@@ -745,6 +752,143 @@ export function App() {
       setSelectedCharacterId(nextCharacters[0]?.id ?? demoCharacters[0].id);
       return nextCharacters.length ? nextCharacters : [createDefaultCharacter(currentUserId)];
     });
+  }
+
+  async function handleSaveRoom(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextRoom = {
+      ...roomDraft,
+      title: roomDraft.title.trim() || '無題のルーム',
+      summary: roomDraft.summary.trim(),
+      tags: normalizeTags(roomDraft.tags),
+    };
+
+    if (supabase && authState === 'allowed' && selectedRoomId && canEditActiveRoom) {
+      const { data, error } = await supabase
+        .from('rooms')
+        .update({
+          title: nextRoom.title,
+          summary: nextRoom.summary,
+          tags: nextRoom.tags,
+        })
+        .eq('id', selectedRoomId)
+        .select('id, title, summary, tags, created_by')
+        .single();
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+      const saved = rowToRoom(data);
+      setRooms((current) => current.map((room) => (room.id === saved.id ? saved : room)));
+      setRoomDraft(saved);
+      setAuthMessage('ルームを保存しました。');
+      return;
+    }
+
+    setRooms((current) => current.map((room) => (room.id === nextRoom.id ? nextRoom : room)));
+    setRoomDraft(nextRoom);
+  }
+
+  async function handleCreateScene() {
+    const nextScene = createDefaultScene(selectedRoomId ?? activeRoom.id, activeActorId);
+
+    if (supabase && authState === 'allowed' && selectedRoomId && currentUserId) {
+      const { data, error } = await supabase
+        .from('scenes')
+        .insert({
+          room_id: selectedRoomId,
+          created_by: currentUserId,
+          title: nextScene.title,
+          summary: nextScene.summary,
+          status: nextScene.status,
+          location_name: nextScene.locationName,
+          map_x: nextScene.mapX,
+          map_y: nextScene.mapY,
+          tags: nextScene.tags,
+        })
+        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
+        .single();
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+      const created = rowToScene(data);
+      setScenes((current) => [...current, created]);
+      setSelectedSceneId(created.id);
+      setSceneDraft(created);
+      setCurrentView('scenes');
+      return;
+    }
+
+    setScenes((current) => [...current, nextScene]);
+    setSelectedSceneId(nextScene.id);
+    setSceneDraft(nextScene);
+    setCurrentView('scenes');
+  }
+
+  async function handleSaveScene(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEditSceneDraft) return;
+    const nextScene = normalizeScene(sceneDraft);
+
+    if (supabase && authState === 'allowed' && selectedRoomId) {
+      const { data, error } = await supabase
+        .from('scenes')
+        .update({
+          title: nextScene.title,
+          summary: nextScene.summary,
+          status: nextScene.status,
+          location_name: nextScene.locationName,
+          map_x: nextScene.mapX,
+          map_y: nextScene.mapY,
+          tags: nextScene.tags,
+        })
+        .eq('id', nextScene.id)
+        .eq('created_by', currentUserId)
+        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
+        .single();
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+      const saved = rowToScene(data);
+      setScenes((current) => current.map((scene) => (scene.id === saved.id ? saved : scene)));
+      setSceneDraft(saved);
+      setAuthMessage('シーンを保存しました。');
+      return;
+    }
+
+    setScenes((current) => current.map((scene) => (scene.id === nextScene.id ? nextScene : scene)));
+    setSceneDraft(nextScene);
+  }
+
+  async function assignSceneLocation(scene: Scene, x: number, y: number, locationName?: string) {
+    const nextScene = { ...scene, mapX: x, mapY: y, locationName: locationName || scene.locationName };
+    if (supabase && authState === 'allowed') {
+      if (scene.createdBy !== currentUserId) return;
+      const { data, error } = await supabase
+        .from('scenes')
+        .update({ map_x: x, map_y: y, location_name: nextScene.locationName })
+        .eq('id', scene.id)
+        .eq('created_by', currentUserId)
+        .select('id, room_id, created_by, title, status, summary, location_name, map_x, map_y, tags, created_at')
+        .single();
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+      const saved = rowToScene(data);
+      setScenes((current) => current.map((currentScene) => (currentScene.id === saved.id ? saved : currentScene)));
+      setSceneDraft(saved);
+      return;
+    }
+
+    setScenes((current) => current.map((currentScene) => (currentScene.id === scene.id ? nextScene : currentScene)));
+    setSceneDraft((current) => (current.id === scene.id ? nextScene : current));
   }
 
   if (authState === 'checking') {
@@ -839,6 +983,22 @@ export function App() {
               ルーム
             </button>
             <button
+              className={currentView === 'rooms' ? 'topbar-tab active' : 'topbar-tab'}
+              type="button"
+              onClick={() => setCurrentView('rooms')}
+            >
+              <LayoutList size={16} />
+              ルーム管理
+            </button>
+            <button
+              className={currentView === 'scenes' ? 'topbar-tab active' : 'topbar-tab'}
+              type="button"
+              onClick={() => setCurrentView('scenes')}
+            >
+              <BookOpen size={16} />
+              シーン
+            </button>
+            <button
               className={currentView === 'my-page' ? 'topbar-tab active' : 'topbar-tab'}
               type="button"
               onClick={() => setCurrentView('my-page')}
@@ -861,7 +1021,214 @@ export function App() {
         </div>
       </header>
 
-      {currentView === 'my-page' ? (
+      {currentView === 'rooms' ? (
+        <section className="management-page" aria-label="ルーム管理">
+          <div className="my-page-header">
+            <div>
+              <p>Room Menu</p>
+              <h1>ルーム管理</h1>
+            </div>
+          </div>
+          <div className="management-grid">
+            <aside className="character-manager-list" aria-label="ルーム一覧">
+              <div className="section-title">
+                <LayoutList size={16} />
+                ルーム一覧
+              </div>
+              <div className="scene-list">
+                {rooms.map((room) => (
+                  <button
+                    className={room.id === activeRoom.id ? 'scene-item selected' : 'scene-item'}
+                    key={room.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRoomId(room.id);
+                      setRoomDraft(room);
+                    }}
+                  >
+                    <span>{room.title}</span>
+                    <small>{room.tags.join(', ') || 'no tags'}</small>
+                  </button>
+                ))}
+              </div>
+            </aside>
+            <form className="tool-panel" onSubmit={handleSaveRoom}>
+              <div className="tool-panel-header">
+                <div>
+                  <p>Room Detail</p>
+                  <h2>{roomDraft.title}</h2>
+                </div>
+                <button className="button-primary" type="submit" disabled={!canEditActiveRoom}>
+                  <Save size={16} />
+                  保存
+                </button>
+              </div>
+              <div className="field-grid two">
+                <label>
+                  ルーム名
+                  <input
+                    value={roomDraft.title}
+                    onChange={(event) => setRoomDraft({ ...roomDraft, title: event.target.value })}
+                    disabled={!canEditActiveRoom}
+                  />
+                </label>
+                <label>
+                  タグ
+                  <input
+                    value={roomDraft.tags.join(', ')}
+                    onChange={(event) => setRoomDraft({ ...roomDraft, tags: parseTags(event.target.value) })}
+                    disabled={!canEditActiveRoom}
+                    placeholder="導入, 1920s, 雨"
+                  />
+                </label>
+              </div>
+              <label className="full-label">
+                概要
+                <textarea
+                  value={roomDraft.summary}
+                  onChange={(event) => setRoomDraft({ ...roomDraft, summary: event.target.value })}
+                  disabled={!canEditActiveRoom}
+                />
+              </label>
+              <div className="tag-row">
+                {roomDraft.tags.map((tag) => (
+                  <span className="access-chip" key={tag}>{tag}</span>
+                ))}
+              </div>
+            </form>
+          </div>
+        </section>
+      ) : currentView === 'scenes' ? (
+        <section className="management-page" aria-label="シーン管理">
+          <div className="my-page-header">
+            <div>
+              <p>Scene Menu</p>
+              <h1>シーン管理</h1>
+            </div>
+            <button className="button-primary" type="button" onClick={handleCreateScene}>
+              <Plus size={16} />
+              新規シーン
+            </button>
+          </div>
+          <div className="management-grid">
+            <aside className="character-manager-list" aria-label="シーン一覧">
+              <div className="section-title">
+                <BookOpen size={16} />
+                シーン一覧
+              </div>
+              <div className="scene-list">
+                {scenes.map((scene) => (
+                  <button
+                    className={scene.id === selectedSceneId ? 'scene-item selected' : 'scene-item'}
+                    key={scene.id}
+                    type="button"
+                    onClick={() => setSelectedSceneId(scene.id)}
+                  >
+                    <span>{scene.title}</span>
+                    <small>{scene.locationName || '場所未設定'} / {scene.tags.join(', ') || 'no tags'}</small>
+                  </button>
+                ))}
+              </div>
+            </aside>
+            <form className="tool-panel" onSubmit={handleSaveScene}>
+              <div className="tool-panel-header">
+                <div>
+                  <p>Scene Detail</p>
+                  <h2>{sceneDraft.title}</h2>
+                </div>
+                <button className="button-primary" type="submit" disabled={!canEditSceneDraft}>
+                  <Save size={16} />
+                  保存
+                </button>
+              </div>
+              {!canEditSceneDraft && <p className="muted">このシーンは作成者のみ編集できます。</p>}
+              <div className="field-grid two">
+                <label>
+                  シーン名
+                  <input
+                    value={sceneDraft.title}
+                    onChange={(event) => setSceneDraft({ ...sceneDraft, title: event.target.value })}
+                    disabled={!canEditSceneDraft}
+                  />
+                </label>
+                <label>
+                  場所
+                  <input
+                    value={sceneDraft.locationName}
+                    onChange={(event) => setSceneDraft({ ...sceneDraft, locationName: event.target.value })}
+                    disabled={!canEditSceneDraft}
+                    placeholder="酒場、港の倉庫街など"
+                  />
+                </label>
+                <label>
+                  状態
+                  <select
+                    value={sceneDraft.status}
+                    onChange={(event) =>
+                      setSceneDraft({ ...sceneDraft, status: event.target.value as Scene['status'] })
+                    }
+                    disabled={!canEditSceneDraft}
+                  >
+                    <option value="active">active</option>
+                    <option value="paused">paused</option>
+                    <option value="archived">archived</option>
+                  </select>
+                </label>
+                <label>
+                  タグ
+                  <input
+                    value={sceneDraft.tags.join(', ')}
+                    onChange={(event) => setSceneDraft({ ...sceneDraft, tags: parseTags(event.target.value) })}
+                    disabled={!canEditSceneDraft}
+                    placeholder="探索, 屋内, 重要"
+                  />
+                </label>
+              </div>
+              <div className="field-grid two">
+                <label>
+                  マップX
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={sceneDraft.mapX ?? ''}
+                    onChange={(event) =>
+                      setSceneDraft({ ...sceneDraft, mapX: event.target.value === '' ? null : Number(event.target.value) })
+                    }
+                    disabled={!canEditSceneDraft}
+                  />
+                </label>
+                <label>
+                  マップY
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={sceneDraft.mapY ?? ''}
+                    onChange={(event) =>
+                      setSceneDraft({ ...sceneDraft, mapY: event.target.value === '' ? null : Number(event.target.value) })
+                    }
+                    disabled={!canEditSceneDraft}
+                  />
+                </label>
+              </div>
+              <label className="full-label">
+                概要
+                <textarea
+                  value={sceneDraft.summary}
+                  onChange={(event) => setSceneDraft({ ...sceneDraft, summary: event.target.value })}
+                  disabled={!canEditSceneDraft}
+                />
+              </label>
+              <div className="tag-row">
+                {sceneDraft.tags.map((tag) => (
+                  <span className="access-chip" key={tag}>{tag}</span>
+                ))}
+              </div>
+            </form>
+          </div>
+        </section>
+      ) : currentView === 'my-page' ? (
         <section className="my-page" aria-label="マイページ">
           <div className="my-page-header">
             <div>
@@ -932,7 +1299,7 @@ export function App() {
               </div>
               <div className="field-grid two">
                 <label>
-                  対応シーン
+                  配置するシーン
                   <select value={selectedSceneId} onChange={(event) => setSelectedSceneId(event.target.value)}>
                     {scenes.map((scene) => (
                       <option key={scene.id} value={scene.id}>
@@ -942,16 +1309,16 @@ export function App() {
                   </select>
                 </label>
                 <label>
-                  地点名
+                  場所名
                   <input
                     value={mapPinLabel}
                     onChange={(event) => setMapPinLabel(event.target.value)}
-                    placeholder="奥の扉前"
+                    placeholder={activeScene.locationName || '奥の扉前'}
                   />
                 </label>
                 <label>
-                  現在の発言者
-                  <input value={`${activeScene.title} / ${activeCharacter.name}`} readOnly />
+                  ルーム
+                  <input value={activeRoom.title} readOnly />
                 </label>
               </div>
               <div
@@ -965,18 +1332,19 @@ export function App() {
               >
                 {activeSceneMap ? (
                   <>
-                    <img src={activeSceneMap.imageUrl} alt={`${activeScene.title}のマップ`} />
-                    {activeScenePins.map((pin) => (
+                    <img src={activeSceneMap.imageUrl} alt={`${activeRoom.title}のマップ`} />
+                    {scenePins.map((pin) => (
                       <button
                         className={pin.id === selectedMapPin?.id ? 'map-pin active' : 'map-pin'}
                         key={pin.id}
                         type="button"
-                        style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                        style={{ left: `${pin.mapX}%`, top: `${pin.mapY}%` }}
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedMapPinId(pin.id);
+                          setSelectedSceneId(pin.id);
                         }}
-                        aria-label={pin.label}
+                        aria-label={pin.title}
                       >
                         <MapPin size={15} />
                       </button>
@@ -992,9 +1360,9 @@ export function App() {
               {selectedMapPin && (
                 <div className="pin-detail">
                   <div>
-                    <strong>{selectedMapPin.label}</strong>
+                    <strong>{selectedMapPin.locationName || selectedMapPin.title}</strong>
                     <span>
-                      {selectedMapPin.sceneTitle} / {selectedMapPin.characterName} / {selectedMapPin.createdAt}
+                      {selectedMapPin.title} / {selectedMapPin.tags.join(', ') || 'no tags'}
                     </span>
                   </div>
                   <button className="button-secondary" type="button" onClick={() => handleUseMapPin(selectedMapPin)}>
@@ -1037,10 +1405,14 @@ export function App() {
           <section>
             <div className="section-title">
               <BookOpen size={16} />
-              Scenes
+              Recent Scenes
             </div>
+            <button className="button-secondary rail-action" type="button" onClick={() => setCurrentView('scenes')}>
+              <BookOpen size={16} />
+              シーンメニュー
+            </button>
             <div className="scene-list">
-              {scenes.map((scene) => (
+              {recentScenes.map((scene) => (
                 <button
                   className={scene.id === selectedSceneId ? 'scene-item selected' : 'scene-item'}
                   key={scene.id}
@@ -1048,7 +1420,7 @@ export function App() {
                   onClick={() => setSelectedSceneId(scene.id)}
                 >
                   <span>{scene.title}</span>
-                  <small>{scene.status}</small>
+                  <small>{scene.locationName || scene.status}</small>
                 </button>
               ))}
             </div>
@@ -1206,11 +1578,11 @@ export function App() {
             <h2>Scene Map</h2>
             {activeSceneMap ? (
               <div className="scene-map-preview">
-                <img src={activeSceneMap.imageUrl} alt={`${activeScene.title}のマップ`} />
-                <span>{activeScenePins.length} pins</span>
+                <img src={activeSceneMap.imageUrl} alt={`${activeRoom.title}のマップ`} />
+                <span>{scenePins.length} scene pins</span>
               </div>
             ) : (
-              <p>このシーンにはまだマップがありません。</p>
+              <p>このルームにはまだマップがありません。</p>
             )}
             <button className="button-secondary rail-action" type="button" onClick={() => setCurrentView('tools')}>
               <Map size={16} />
@@ -1558,6 +1930,50 @@ function getProfileKey(user: User, discordUserId: string | null) {
   return user.email ? user.email.toLowerCase() : null;
 }
 
+function rowToRoom(room: {
+  id: string;
+  title: string;
+  summary?: string | null;
+  tags?: string[] | null;
+  created_by?: string | null;
+}): Room {
+  return {
+    id: room.id,
+    title: room.title,
+    summary: room.summary ?? '',
+    tags: normalizeTags(room.tags),
+    createdBy: room.created_by ?? null,
+  };
+}
+
+function rowToScene(scene: {
+  id: string;
+  room_id?: string | null;
+  created_by?: string | null;
+  title: string;
+  status?: string | null;
+  summary?: string | null;
+  location_name?: string | null;
+  map_x?: number | string | null;
+  map_y?: number | string | null;
+  tags?: string[] | null;
+  created_at?: string | null;
+}): Scene {
+  return normalizeScene({
+    id: scene.id,
+    roomId: scene.room_id ?? null,
+    createdBy: scene.created_by ?? null,
+    title: scene.title,
+    status: scene.status === 'paused' || scene.status === 'archived' ? scene.status : 'active',
+    summary: scene.summary ?? '',
+    locationName: scene.location_name ?? '',
+    mapX: toMapCoordinate(scene.map_x),
+    mapY: toMapCoordinate(scene.map_y),
+    tags: normalizeTags(scene.tags),
+    createdAt: scene.created_at ?? null,
+  });
+}
+
 function rowToCharacter(character: CharacterRow): Character {
   return normalizeCharacter({
     id: character.id,
@@ -1639,6 +2055,38 @@ function createDefaultCharacter(ownerId: string | null): Character {
   });
 }
 
+function createDefaultScene(roomId: string | null, creatorId: string | null): Scene {
+  return normalizeScene({
+    id: crypto.randomUUID(),
+    roomId,
+    createdBy: creatorId,
+    title: '新規シーン',
+    status: 'active',
+    summary: '',
+    locationName: '',
+    mapX: null,
+    mapY: null,
+    tags: [],
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function normalizeScene(scene: SceneDraft): Scene {
+  return {
+    id: scene.id,
+    roomId: scene.roomId ?? null,
+    createdBy: scene.createdBy ?? null,
+    title: scene.title.trim() || '無題のシーン',
+    status: scene.status,
+    summary: scene.summary.trim(),
+    locationName: scene.locationName.trim(),
+    mapX: toMapCoordinate(scene.mapX),
+    mapY: toMapCoordinate(scene.mapY),
+    tags: normalizeTags(scene.tags),
+    createdAt: scene.createdAt ?? null,
+  };
+}
+
 function deriveCoCValues(character: Character) {
   const { con, siz, int, pow, edu } = character.characteristics;
   const cthulhuMythos = getSkillTotal(character.skills['クトゥルフ神話']);
@@ -1666,6 +2114,22 @@ function normalizeSkills(skills: unknown, characteristics: CoCCharacteristics): 
 function clampSkillPoint(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.min(999, Math.max(0, Math.trunc(value)));
+}
+
+function parseTags(value: string) {
+  return normalizeTags(value.split(/[,\n、]/));
+}
+
+function normalizeTags(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 12))];
+}
+
+function toMapCoordinate(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(100, Math.max(0, parsed));
 }
 
 function formatLog(messages: Array<RpMessage & { character?: Character }>, format: LogFormat) {
