@@ -49,7 +49,7 @@ import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSk
 
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
-type ViewMode = 'room' | 'rooms' | 'scenes' | 'my-page' | 'tools';
+type ViewMode = 'room' | 'rooms' | 'my-page' | 'tools';
 type LogFormat = 'chat' | 'script' | 'markdown';
 type SceneMapRecord = {
   sceneId: string;
@@ -834,7 +834,8 @@ export function App() {
       setSelectedSceneId(created.id);
       setSceneDraft(created);
       setConfiguredSceneId(created.id);
-      setCurrentView('scenes');
+      setIsRoomConfigOpen(false);
+      setCurrentView('rooms');
       return;
     }
 
@@ -842,7 +843,8 @@ export function App() {
     setSelectedSceneId(nextScene.id);
     setSceneDraft(nextScene);
     setConfiguredSceneId(nextScene.id);
-    setCurrentView('scenes');
+    setIsRoomConfigOpen(false);
+    setCurrentView('rooms');
   }
 
   async function handleSaveScene(event: FormEvent<HTMLFormElement>) {
@@ -1004,14 +1006,6 @@ export function App() {
               ルーム
             </button>
             <button
-              className={currentView === 'scenes' ? 'topbar-tab active' : 'topbar-tab'}
-              type="button"
-              onClick={() => setCurrentView('scenes')}
-            >
-              <BookOpen size={16} />
-              シーン
-            </button>
-            <button
               className={currentView === 'my-page' ? 'topbar-tab active' : 'topbar-tab'}
               type="button"
               onClick={() => setCurrentView('my-page')}
@@ -1137,227 +1131,186 @@ export function App() {
                     <p>Room Scenes</p>
                     <h2>{activeRoom.title}</h2>
                   </div>
-                  <button className="button-primary" type="button" onClick={() => setCurrentView('room')}>
-                    <MessageSquareText size={16} />
-                    入室
-                  </button>
+                  <div className="panel-actions">
+                    <button className="button-secondary" type="button" onClick={handleCreateScene}>
+                      <Plus size={16} />
+                      新規シーン
+                    </button>
+                    <button className="button-primary" type="button" onClick={() => setCurrentView('room')}>
+                      <MessageSquareText size={16} />
+                      入室
+                    </button>
+                  </div>
                 </div>
                 <p className="muted">{activeRoom.summary}</p>
                 <div className="scene-list">
                   {roomScenes.map((scene) => (
-                    <button
+                    <div
                       className={scene.id === selectedSceneId ? 'scene-item selected' : 'scene-item'}
                       key={scene.id}
-                      type="button"
-                      onClick={() => setSelectedSceneId(scene.id)}
                     >
                       <span>{scene.title}</span>
                       <small>{scene.locationName || '場所未設定'} / {scene.timeLabel || '時間未設定'}</small>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        </section>
-      ) : currentView === 'scenes' ? (
-        <section className="management-page" aria-label="シーン管理">
-          <div className="my-page-header">
-            <div>
-              <p>Scene Menu</p>
-              <h1>シーン管理</h1>
-            </div>
-            <button className="button-primary" type="button" onClick={handleCreateScene}>
-              <Plus size={16} />
-              新規シーン
-            </button>
-          </div>
-          <div className="management-grid">
-            <aside className="character-manager-list" aria-label="シーン一覧">
-              <div className="section-title">
-                <BookOpen size={16} />
-                {activeRoom.title}
-              </div>
-              <select
-                className="rail-select"
-                value={activeRoom.id}
-                onChange={(event) => {
-                  setSelectedRoomId(event.target.value);
-                  setConfiguredSceneId(null);
-                }}
-              >
-                {rooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    {room.title}
-                  </option>
-                ))}
-              </select>
-              <div className="scene-list">
-                {roomScenes.map((scene) => (
-                  <div
-                    className={scene.id === selectedSceneId ? 'scene-item selected' : 'scene-item'}
-                    key={scene.id}
-                  >
-                    <span>{scene.title}</span>
-                    <small>{scene.locationName || '場所未設定'} / {scene.tags.join(', ') || 'no tags'}</small>
-                    <div className="inline-actions">
-                      <button className="button-secondary" type="button" onClick={() => setSelectedSceneId(scene.id)}>
-                        表示
-                      </button>
-                      {scene.createdBy === activeActorId && (
+                      <div className="inline-actions">
                         <button
-                          className="mini-icon-button"
+                          className="button-secondary"
                           type="button"
                           onClick={() => {
                             setSelectedSceneId(scene.id);
-                            setConfiguredSceneId(scene.id);
+                            setConfiguredSceneId(null);
                           }}
-                          aria-label="シーン設定"
                         >
-                          <Settings size={15} />
+                          表示
+                        </button>
+                        {scene.createdBy === activeActorId && (
+                          <button
+                            className="mini-icon-button"
+                            type="button"
+                            onClick={() => {
+                              setSelectedSceneId(scene.id);
+                              setConfiguredSceneId(scene.id);
+                            }}
+                            aria-label="シーン設定"
+                          >
+                            <Settings size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {configuredSceneId === sceneDraft.id && canEditSceneDraft ? (
+                  <form className="inline-editor" onSubmit={handleSaveScene}>
+                    <div className="tool-panel-header">
+                      <div>
+                        <p>Scene Detail</p>
+                        <h2>{sceneDraft.title}</h2>
+                      </div>
+                      <button className="button-primary" type="submit" disabled={!canEditSceneDraft}>
+                        <Save size={16} />
+                        保存
+                      </button>
+                    </div>
+                    <div className="field-grid two">
+                      <label>
+                        シーン名
+                        <input
+                          value={sceneDraft.title}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, title: event.target.value })}
+                          disabled={!canEditSceneDraft}
+                        />
+                      </label>
+                      <label>
+                        場所
+                        <input
+                          value={sceneDraft.locationName}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, locationName: event.target.value })}
+                          disabled={!canEditSceneDraft}
+                          placeholder="酒場、港の倉庫街など"
+                        />
+                      </label>
+                      <label>
+                        時間
+                        <input
+                          value={sceneDraft.timeLabel}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, timeLabel: event.target.value })}
+                          disabled={!canEditSceneDraft}
+                          placeholder="深夜、翌朝、1923年春など"
+                        />
+                      </label>
+                      <label>
+                        状態
+                        <select
+                          value={sceneDraft.status}
+                          onChange={(event) =>
+                            setSceneDraft({ ...sceneDraft, status: event.target.value as Scene['status'] })
+                          }
+                          disabled={!canEditSceneDraft}
+                        >
+                          <option value="active">active</option>
+                          <option value="paused">paused</option>
+                          <option value="archived">archived</option>
+                        </select>
+                      </label>
+                      <label>
+                        タグ
+                        <input
+                          value={sceneDraft.tags.join(', ')}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, tags: parseTags(event.target.value) })}
+                          disabled={!canEditSceneDraft}
+                          placeholder="探索, 屋内, 重要"
+                        />
+                      </label>
+                    </div>
+                    <div className="field-grid two">
+                      <label>
+                        マップX
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={sceneDraft.mapX ?? ''}
+                          onChange={(event) =>
+                            setSceneDraft({ ...sceneDraft, mapX: event.target.value === '' ? null : Number(event.target.value) })
+                          }
+                          disabled={!canEditSceneDraft}
+                        />
+                      </label>
+                      <label>
+                        マップY
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={sceneDraft.mapY ?? ''}
+                          onChange={(event) =>
+                            setSceneDraft({ ...sceneDraft, mapY: event.target.value === '' ? null : Number(event.target.value) })
+                          }
+                          disabled={!canEditSceneDraft}
+                        />
+                      </label>
+                    </div>
+                    <label className="full-label">
+                      概要
+                      <textarea
+                        value={sceneDraft.summary}
+                        onChange={(event) => setSceneDraft({ ...sceneDraft, summary: event.target.value })}
+                        disabled={!canEditSceneDraft}
+                      />
+                    </label>
+                  </form>
+                ) : (
+                  <section className="inline-editor" aria-label="選択中シーン">
+                    <div className="tool-panel-header">
+                      <div>
+                        <p>Scene Detail</p>
+                        <h2>{activeScene.title}</h2>
+                      </div>
+                      {activeScene.createdBy === activeActorId && (
+                        <button className="button-secondary" type="button" onClick={() => setConfiguredSceneId(activeScene.id)}>
+                          <Settings size={16} />
+                          設定
                         </button>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </aside>
-            {configuredSceneId === sceneDraft.id && canEditSceneDraft ? (
-              <form className="tool-panel" onSubmit={handleSaveScene}>
-                <div className="tool-panel-header">
-                  <div>
-                    <p>Scene Detail</p>
-                    <h2>{sceneDraft.title}</h2>
-                  </div>
-                  <button className="button-primary" type="submit" disabled={!canEditSceneDraft}>
-                    <Save size={16} />
-                    保存
-                  </button>
-                </div>
-                {!canEditSceneDraft && <p className="muted">このシーンは作成者のみ編集できます。</p>}
-                <div className="field-grid two">
-                  <label>
-                    シーン名
-                    <input
-                      value={sceneDraft.title}
-                      onChange={(event) => setSceneDraft({ ...sceneDraft, title: event.target.value })}
-                      disabled={!canEditSceneDraft}
-                    />
-                  </label>
-                  <label>
-                    場所
-                    <input
-                      value={sceneDraft.locationName}
-                      onChange={(event) => setSceneDraft({ ...sceneDraft, locationName: event.target.value })}
-                      disabled={!canEditSceneDraft}
-                      placeholder="酒場、港の倉庫街など"
-                    />
-                  </label>
-                  <label>
-                    時間
-                    <input
-                      value={sceneDraft.timeLabel}
-                      onChange={(event) => setSceneDraft({ ...sceneDraft, timeLabel: event.target.value })}
-                      disabled={!canEditSceneDraft}
-                      placeholder="深夜、翌朝、1923年春など"
-                    />
-                  </label>
-                  <label>
-                    状態
-                    <select
-                      value={sceneDraft.status}
-                      onChange={(event) =>
-                        setSceneDraft({ ...sceneDraft, status: event.target.value as Scene['status'] })
-                      }
-                      disabled={!canEditSceneDraft}
-                    >
-                      <option value="active">active</option>
-                      <option value="paused">paused</option>
-                      <option value="archived">archived</option>
-                    </select>
-                  </label>
-                  <label>
-                    タグ
-                    <input
-                      value={sceneDraft.tags.join(', ')}
-                      onChange={(event) => setSceneDraft({ ...sceneDraft, tags: parseTags(event.target.value) })}
-                      disabled={!canEditSceneDraft}
-                      placeholder="探索, 屋内, 重要"
-                    />
-                  </label>
-                </div>
-                <div className="field-grid two">
-                  <label>
-                    マップX
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={sceneDraft.mapX ?? ''}
-                      onChange={(event) =>
-                        setSceneDraft({ ...sceneDraft, mapX: event.target.value === '' ? null : Number(event.target.value) })
-                      }
-                      disabled={!canEditSceneDraft}
-                    />
-                  </label>
-                  <label>
-                    マップY
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={sceneDraft.mapY ?? ''}
-                      onChange={(event) =>
-                        setSceneDraft({ ...sceneDraft, mapY: event.target.value === '' ? null : Number(event.target.value) })
-                      }
-                      disabled={!canEditSceneDraft}
-                    />
-                  </label>
-                </div>
-                <label className="full-label">
-                  概要
-                  <textarea
-                    value={sceneDraft.summary}
-                    onChange={(event) => setSceneDraft({ ...sceneDraft, summary: event.target.value })}
-                    disabled={!canEditSceneDraft}
-                  />
-                </label>
-                <div className="tag-row">
-                  {sceneDraft.tags.map((tag) => (
-                    <span className="access-chip" key={tag}>{tag}</span>
-                  ))}
-                </div>
-              </form>
-            ) : (
-              <section className="tool-panel">
-                <div className="tool-panel-header">
-                  <div>
-                    <p>Scene Detail</p>
-                    <h2>{activeScene.title}</h2>
-                  </div>
-                  {activeScene.createdBy === activeActorId && (
-                    <button className="button-secondary" type="button" onClick={() => setConfiguredSceneId(activeScene.id)}>
-                      <Settings size={16} />
-                      設定
-                    </button>
-                  )}
-                </div>
-                <div className="field-grid two">
-                  <div className="read-field">
-                    <span>場所</span>
-                    <strong>{activeScene.locationName || '未設定'}</strong>
-                  </div>
-                  <div className="read-field">
-                    <span>時間</span>
-                    <strong>{activeScene.timeLabel || '未設定'}</strong>
-                  </div>
-                </div>
-                <p>{activeScene.summary || '概要はまだありません。'}</p>
-                <div className="tag-row">
-                  {activeScene.tags.map((tag) => (
-                    <span className="access-chip" key={tag}>{tag}</span>
-                  ))}
-                </div>
+                    <div className="field-grid two">
+                      <div className="read-field">
+                        <span>場所</span>
+                        <strong>{activeScene.locationName || '未設定'}</strong>
+                      </div>
+                      <div className="read-field">
+                        <span>時間</span>
+                        <strong>{activeScene.timeLabel || '未設定'}</strong>
+                      </div>
+                    </div>
+                    <p>{activeScene.summary || '概要はまだありません。'}</p>
+                    <div className="tag-row">
+                      {activeScene.tags.map((tag) => (
+                        <span className="access-chip" key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </section>
             )}
           </div>
@@ -1435,7 +1388,7 @@ export function App() {
                 <label>
                   配置するシーン
                   <select value={selectedSceneId} onChange={(event) => setSelectedSceneId(event.target.value)}>
-                    {scenes.map((scene) => (
+                    {roomScenes.map((scene) => (
                       <option key={scene.id} value={scene.id}>
                         {scene.title}
                       </option>
@@ -1541,9 +1494,9 @@ export function App() {
               <BookOpen size={16} />
               Recent Scenes
             </div>
-            <button className="button-secondary rail-action" type="button" onClick={() => setCurrentView('scenes')}>
+            <button className="button-secondary rail-action" type="button" onClick={() => setCurrentView('rooms')}>
               <BookOpen size={16} />
-              シーンメニュー
+              ルームのシーン一覧
             </button>
             <div className="scene-list">
               {recentScenes.map((scene) => (

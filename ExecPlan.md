@@ -34,9 +34,8 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - CoC 6th edition skills are edited from a fixed skill list with base, occupation, interest, growth, other, and total columns. Free-form skill text areas are not used.
 - Alpha world-support tools are client-side only: uploaded room map images remain local to the browser session, while scenes store location coordinates and render as pins on the room map.
 - A room is a collection of scenes. The top room menu opens the room list; each room can be entered from the list, and room settings open from that room's gear button.
-- A scene belongs to one room, has one location plus a time label, and supports tags. Scene creation is available from the scene menu; scene updates are creator-only.
-- The scene menu is opened from the top navigation, filters scenes by the selected room, and only shows scene config controls to the scene creator.
-- The room sidebar only shows recent scenes and links to the full scene menu.
+- A scene belongs to one room, has one location plus a time label, and supports tags. Scene listing, creation, and creator-only scene settings are handled inside the selected room menu instead of a separate top-level scene menu.
+- The room sidebar only shows recent scenes and links back to the room menu for full scene management.
 - RP message editing and deletion are author-only operations. The UI only exposes controls for the current user's messages, and RLS restricts update/delete to rows where `author_id = auth.uid()`.
 - The posting UI does not expose IC/OOC terminology. Users choose either a character name for character speech/action or `中の人` for player-side discussion; the database still stores this as `ic` or `ooc` internally.
 

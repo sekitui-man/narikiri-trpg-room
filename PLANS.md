@@ -20,7 +20,7 @@
 - Scene memo panel and My Page character management.
 - The room menu opens a room list; room settings open from each room's gear button.
 - A room is a collection of scenes.
-- Scene menu screens are filtered by selected room and support tags.
+- Scene listing, creation, and creator-only settings live inside the selected room menu.
 - Scenes store one location, a time label, and can be pinned on the room map.
 - Scene creators may edit only their own scenes.
 - Internal CoC 6th edition investigator database with per-user character ownership.
