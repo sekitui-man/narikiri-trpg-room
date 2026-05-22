@@ -351,14 +351,20 @@ select:focus {
 }
 
 .room-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
   background: var(--surface);
+}
+
+.room-card-main {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
 }
 
 .room-card.selected {
@@ -382,6 +388,46 @@ select:focus {
   line-height: 16px;
   font-weight: 400;
   letter-spacing: 0.02em;
+}
+
+.accordion-toggle svg {
+  transition: transform 160ms ease;
+}
+
+.accordion-toggle.open svg {
+  transform: rotate(180deg);
+}
+
+.room-accordion {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.room-accordion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--neutral);
+}
+
+.room-accordion-item span {
+  display: block;
+  color: var(--primary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.room-accordion-item small {
+  display: block;
+  margin-top: 2px;
 }
 
 .character-manager-list {
@@ -1338,6 +1384,11 @@ select:focus {
   }
 
   .room-card {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .room-accordion-item {
     align-items: stretch;
     flex-direction: column;
   }

@@ -35,3 +35,4 @@
 - Moved room, scene, and RP message mutations behind Cloudflare Pages Functions and changed room/scene settings to tabbed modal dialogs.
 - Moved room scene permission controls out of the inline room scene list and kept them behind the room settings modal permission tab.
 - Split room navigation into room list, room-content scene list, and individual scene conversation screens.
+- Added room-list scene accordions with direct scene entry and authorized scene settings access.

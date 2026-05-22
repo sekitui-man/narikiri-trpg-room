@@ -6,6 +6,7 @@ import {
   Archive,
   BookOpen,
   Check,
+  ChevronDown,
   ClipboardCopy,
   Pencil,
   Lock,
@@ -161,6 +162,7 @@ export function App() {
   const [messages, setMessages] = useState<RpMessage[]>(demoMessages);
   const [roomMembers, setRoomMembers] = useState<RoomMember[]>(demoRoomMembers);
   const [roomScenePermissions, setRoomScenePermissions] = useState<RoomScenePermission[]>([]);
+  const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(new Set());
   const [sceneEditPermissions, setSceneEditPermissions] = useState<SceneEditPermission[]>([]);
   const [selectedRoomPermissionUserId, setSelectedRoomPermissionUserId] = useState('');
   const [roomPermissionDraft, setRoomPermissionDraft] = useState({ canCreateScenes: false, canDeleteScenes: false });
@@ -234,6 +236,10 @@ export function App() {
     activeRoom.createdBy === currentUserId ||
     scene.createdBy === currentUserId ||
     Boolean(activeRoomScenePermission?.canDeleteScenes);
+  const canEditScene = (scene: Scene) =>
+    authState === 'demo' ||
+    scene.createdBy === currentUserId ||
+    sceneEditPermissions.some((permission) => permission.sceneId === scene.id && permission.userId === currentUserId);
 
   const groupedMessages = useMemo(
     () =>
@@ -888,6 +894,17 @@ export function App() {
     setCurrentView('room-scenes');
   }
 
+  function toggleRoomAccordion(room: Room) {
+    setSelectedRoomId(room.id);
+    setRoomDraft(room);
+    setExpandedRoomIds((current) => {
+      const next = new Set(current);
+      if (next.has(room.id)) next.delete(room.id);
+      else next.add(room.id);
+      return next;
+    });
+  }
+
   function openScene(scene: Scene) {
     const parentRoom = rooms.find((room) => room.id === scene.roomId);
     if (parentRoom) {
@@ -898,6 +915,16 @@ export function App() {
     setSceneDraft(scene);
     setConfiguredSceneId(null);
     setCurrentView('room');
+  }
+
+  function openSceneSettings(room: Room, scene: Scene) {
+    setSelectedRoomId(room.id);
+    setRoomDraft(room);
+    setSelectedSceneId(scene.id);
+    setSceneDraft(scene);
+    setConfiguredSceneId(scene.id);
+    setSceneSettingsTab('basic');
+    setCurrentView('room-scenes');
   }
 
   async function handleCreateScene() {
@@ -1160,39 +1187,85 @@ export function App() {
                 ルーム一覧
               </div>
               <div className="room-card-list">
-                {rooms.map((room) => (
-                  <div
-                    className={room.id === activeRoom.id ? 'room-card selected' : 'room-card'}
-                    key={room.id}
-                  >
-                    <div>
-                      <span>{room.title}</span>
-                      <small>{room.tags.join(', ') || 'no tags'}</small>
-                    </div>
-                    <div className="inline-actions">
-                      <button
-                        className="button-secondary"
-                        type="button"
-                        onClick={() => openRoomScenes(room)}
-                      >
-                        シーン一覧
-                      </button>
-                      <button
-                        className="mini-icon-button"
-                        type="button"
-                        onClick={() => {
-                          setSelectedRoomId(room.id);
-                          setRoomDraft(room);
-                          setRoomSettingsTab('basic');
-                          setIsRoomConfigOpen(true);
-                        }}
-                        aria-label="ルーム設定"
-                      >
-                        <Settings size={15} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                {rooms.map((room) => {
+                  const roomListScenes = scenes.filter((scene) => scene.roomId === room.id);
+                  const isExpanded = expandedRoomIds.has(room.id);
+                  return (
+                    <article
+                      className={room.id === activeRoom.id ? 'room-card selected' : 'room-card'}
+                      key={room.id}
+                    >
+                      <div className="room-card-main">
+                        <button
+                          className={isExpanded ? 'mini-icon-button accordion-toggle open' : 'mini-icon-button accordion-toggle'}
+                          type="button"
+                          onClick={() => toggleRoomAccordion(room)}
+                          aria-expanded={isExpanded}
+                          aria-label={`${room.title}のシーン一覧`}
+                        >
+                          <ChevronDown size={16} />
+                        </button>
+                        <div>
+                          <span>{room.title}</span>
+                          <small>{room.tags.join(', ') || 'no tags'}</small>
+                        </div>
+                      </div>
+                      <div className="inline-actions">
+                        <button
+                          className="button-secondary"
+                          type="button"
+                          onClick={() => openRoomScenes(room)}
+                        >
+                          入室
+                        </button>
+                        <button
+                          className="mini-icon-button"
+                          type="button"
+                          onClick={() => {
+                            setSelectedRoomId(room.id);
+                            setRoomDraft(room);
+                            setRoomSettingsTab('basic');
+                            setIsRoomConfigOpen(true);
+                          }}
+                          aria-label="ルーム設定"
+                        >
+                          <Settings size={15} />
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="room-accordion" aria-label={`${room.title}のシーン`}>
+                          {roomListScenes.length ? (
+                            roomListScenes.map((scene) => (
+                              <div className="room-accordion-item" key={scene.id}>
+                                <div>
+                                  <span>{scene.title}</span>
+                                  <small>{scene.locationName || '場所未設定'} / {scene.timeLabel || '時間未設定'}</small>
+                                </div>
+                                <div className="inline-actions">
+                                  <button className="button-secondary" type="button" onClick={() => openScene(scene)}>
+                                    入室
+                                  </button>
+                                  {canEditScene(scene) && (
+                                    <button
+                                      className="mini-icon-button"
+                                      type="button"
+                                      onClick={() => openSceneSettings(room, scene)}
+                                      aria-label="シーン設定"
+                                    >
+                                      <Settings size={15} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="muted">シーンはまだありません。</p>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           </div>
@@ -1384,15 +1457,11 @@ export function App() {
                         >
                           入室
                         </button>
-                        {scene.createdBy === activeActorId && (
+                        {canEditScene(scene) && (
                           <button
                             className="mini-icon-button"
                             type="button"
-                            onClick={() => {
-                              setSelectedSceneId(scene.id);
-                              setConfiguredSceneId(scene.id);
-                              setSceneSettingsTab('basic');
-                            }}
+                            onClick={() => openSceneSettings(activeRoom, scene)}
                             aria-label="シーン設定"
                           >
                             <Settings size={15} />
