@@ -1226,6 +1226,20 @@ export function App() {
                     <h2>{activeRoom.title}</h2>
                   </div>
                   <div className="panel-actions">
+                    {canManageRoomScenePermissions && (
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        onClick={() => {
+                          setRoomDraft(activeRoom);
+                          setRoomSettingsTab('permissions');
+                          setIsRoomConfigOpen(true);
+                        }}
+                      >
+                        <Settings size={16} />
+                        シーン権限
+                      </button>
+                    )}
                     <button
                       className="button-secondary"
                       type="button"
@@ -1289,55 +1303,6 @@ export function App() {
                     </div>
                   ))}
                 </div>
-                {canManageRoomScenePermissions && (
-                  <form className="inline-editor" onSubmit={handleSaveRoomScenePermission}>
-                    <div className="tool-panel-header">
-                      <div>
-                        <p>Room Permission</p>
-                        <h2>シーン権限</h2>
-                      </div>
-                      <button className="button-primary" type="submit" disabled={!selectedRoomPermissionUserId}>
-                        <Save size={16} />
-                        保存
-                      </button>
-                    </div>
-                    <div className="field-grid three">
-                      <label>
-                        対象ユーザ
-                        <select
-                          value={selectedRoomPermissionUserId}
-                          onChange={(event) => setSelectedRoomPermissionUserId(event.target.value)}
-                        >
-                          {activeRoomMembers.map((member) => (
-                            <option key={member.userId} value={member.userId}>
-                              {member.displayName} / {member.role}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="check-row">
-                        <input
-                          type="checkbox"
-                          checked={roomPermissionDraft.canCreateScenes}
-                          onChange={(event) =>
-                            setRoomPermissionDraft({ ...roomPermissionDraft, canCreateScenes: event.target.checked })
-                          }
-                        />
-                        シーン作成
-                      </label>
-                      <label className="check-row">
-                        <input
-                          type="checkbox"
-                          checked={roomPermissionDraft.canDeleteScenes}
-                          onChange={(event) =>
-                            setRoomPermissionDraft({ ...roomPermissionDraft, canDeleteScenes: event.target.checked })
-                          }
-                        />
-                        シーン削除
-                      </label>
-                    </div>
-                  </form>
-                )}
                 {false ? (
                   <form className="inline-editor" onSubmit={handleSaveScene}>
                     <div className="tool-panel-header">

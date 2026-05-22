@@ -33,3 +33,4 @@
 - Removed the separate top-level scene menu and folded scene listing, creation, and creator-only settings into the selected room menu.
 - Restricted login UI and active allowlist checks to Discord OAuth, added room-level scene create/delete delegation, scene-level edit delegation, and Discord profile display in My Page.
 - Moved room, scene, and RP message mutations behind Cloudflare Pages Functions and changed room/scene settings to tabbed modal dialogs.
+- Moved room scene permission controls out of the inline room scene list and kept them behind the room settings modal permission tab.
