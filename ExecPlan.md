@@ -41,6 +41,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Room-level scene creation/deletion delegation is configured only inside the room settings modal permission tab; it is not shown as an inline form in the room scene list.
 - Scene creation and deletion are restricted to the room creator and users explicitly granted room scene permissions by that creator. Scene setting edits are restricted to the scene creator and users explicitly granted scene edit permission by that scene creator. Room members keep read access.
 - The room sidebar only shows recent scenes and links back to the room menu for full scene management.
+- The in-room left navigation rail is collapsible; when closed, it leaves a narrow tab that reopens the rail.
 - My Page shows the signed-in Discord profile from Supabase Auth identity data.
 - RP message editing and deletion are author-only operations. The UI only exposes controls for the current user's messages, and RLS restricts update/delete to rows where `author_id = auth.uid()`.
 - The posting UI does not expose IC/OOC terminology. Users choose either a character name for character speech/action or `中の人` for player-side discussion; the database still stores this as `ic` or `ooc` internally.

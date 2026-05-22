@@ -185,6 +185,7 @@ export function App() {
   const sceneMapsRef = useRef<SceneMapRecord[]>([]);
   const [mapPinLabel, setMapPinLabel] = useState('');
   const [selectedMapPinId, setSelectedMapPinId] = useState<string | null>(null);
+  const [isRoomNavOpen, setIsRoomNavOpen] = useState(true);
   const [logFormat, setLogFormat] = useState<LogFormat>('chat');
 
   useEffect(() => {
@@ -1909,8 +1910,31 @@ export function App() {
           </div>
         </section>
       ) : (
-      <div className="workspace">
+      <div className={isRoomNavOpen ? 'workspace' : 'workspace nav-collapsed'}>
+        {!isRoomNavOpen && (
+          <button
+            className="room-nav-tab"
+            type="button"
+            onClick={() => setIsRoomNavOpen(true)}
+            aria-label="ルームナビゲーションを開く"
+          >
+            <BookOpen size={16} />
+            <span>ナビ</span>
+          </button>
+        )}
+        {isRoomNavOpen && (
         <aside className="left-rail" aria-label="ルームナビゲーション">
+          <div className="rail-toolbar">
+            <span>ルームナビゲーション</span>
+            <button
+              className="mini-icon-button"
+              type="button"
+              onClick={() => setIsRoomNavOpen(false)}
+              aria-label="ルームナビゲーションを閉じる"
+            >
+              <X size={15} />
+            </button>
+          </div>
           <section>
             <div className="section-title">
               <BookOpen size={16} />
@@ -1962,6 +1986,7 @@ export function App() {
             </div>
           </section>
         </aside>
+        )}
 
         <section className="conversation" aria-label="RPタイムライン">
           <div className="scene-hero">
