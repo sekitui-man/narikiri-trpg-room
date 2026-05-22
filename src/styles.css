@@ -337,6 +337,53 @@ select:focus {
   align-items: start;
 }
 
+.room-list-grid,
+.scene-management-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+.room-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.room-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.room-card.selected {
+  border-left-color: var(--tertiary);
+  border-left-width: 4px;
+}
+
+.room-card span {
+  display: block;
+  color: var(--primary);
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.room-card small {
+  display: block;
+  margin-top: 6px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
 .character-manager-list {
   position: sticky;
   top: 26px;
@@ -1288,6 +1335,11 @@ select:focus {
 
   .management-grid {
     grid-template-columns: 1fr;
+  }
+
+  .room-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .character-manager-list {
