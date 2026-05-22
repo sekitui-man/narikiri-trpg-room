@@ -28,13 +28,14 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Discord login uses Supabase Auth OAuth and is gated by `auth.identities.provider_id` against `public.allowed_discord_accounts`; email allowlisting is not part of active login.
 - Characters are stored inside the `narikiri-trpg-room` Supabase project. The `characters` table supports CoC 6th edition investigator fields and per-user ownership; owners manage their own characters, while room `owner`/`gm` members can manage room characters.
 - Character CRUD is served through Cloudflare Pages Functions at `/api/characters`. The Functions use only the Supabase URL plus anon/publishable key, forward the user's Bearer JWT to Supabase, and rely on RLS as the final authorization boundary.
+- Room mutations are served through Cloudflare Pages Functions at `/api/rooms`; scene mutations are served through `/api/scenes`; RP message mutations are served through `/api/messages`. These Functions use only the Supabase URL plus anon/publishable key, forward the user's Bearer JWT to Supabase, validate payloads, and rely on RLS as the final authorization boundary.
 - Character deletion is logical only: archive requests set `is_archived = true`; no physical delete API is exposed.
 - Pages Functions must strictly validate character payload fields, types, string lengths, and numeric ranges. Client-supplied `room_id`, `owner_id`, `is_archived`, and timestamps are not trusted.
 - Character creation and editing belong in My Page, with a character list followed by a sheet editor. The room view only selects existing characters for posting and keeps the right panel for scene memo content.
 - CoC 6th edition skills are edited from a fixed skill list with base, occupation, interest, growth, other, and total columns. Free-form skill text areas are not used.
 - Alpha world-support tools are client-side only: uploaded room map images remain local to the browser session, while scenes store location coordinates and render as pins on the room map.
-- A room is a collection of scenes. The top room menu opens the room list; each room can be entered from the list, and room settings open from that room's gear button.
-- A scene belongs to one room, has one location plus a time label, and supports tags. Scene listing, creation, and creator-only scene settings are handled inside the selected room menu instead of a separate top-level scene menu.
+- A room is a collection of scenes. The top room menu opens the room list; each room can be entered from the list, and room settings open from that room's gear button as a modal dialog with tabs.
+- A scene belongs to one room, has one location plus a time label, and supports tags. Scene listing and creation are handled inside the selected room menu; scene settings open as a modal dialog with tabs.
 - Scene creation and deletion are restricted to the room creator and users explicitly granted room scene permissions by that creator. Scene setting edits are restricted to the scene creator and users explicitly granted scene edit permission by that scene creator. Room members keep read access.
 - The room sidebar only shows recent scenes and links back to the room menu for full scene management.
 - My Page shows the signed-in Discord profile from Supabase Auth identity data.

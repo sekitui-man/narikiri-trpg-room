@@ -17,7 +17,7 @@
 - Text-based RP timeline.
 - Speaker selection from a character name or the player-side `中の人` speaker.
 - Scene memo panel and My Page character management.
-- The room menu opens a room list; room settings open from each room's gear button.
+- The room menu opens a room list; room settings open from each room's gear button in a modal dialog.
 - A room is a collection of scenes.
 - Scene listing, creation, and creator-only settings live inside the selected room menu.
 - Scenes store one location, a time label, and can be pinned on the room map.
@@ -27,7 +27,7 @@
 - Internal CoC 6th edition investigator database with per-user character ownership.
 - World support tools for room map image annotation and session log formatting.
 - Message authors may edit or delete only their own RP messages.
-- Cloudflare Pages Functions boundary for character CRUD.
+- Cloudflare Pages Functions boundary for character CRUD, room mutations, scene mutations, and RP message mutations.
 - Supabase SQL schema with RLS policies for invited room members.
 
 ## Out Of Scope For Alpha

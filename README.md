@@ -35,6 +35,14 @@ Characters are stored in `public.characters` inside this project. Each character
 
 Character CRUD runs through Cloudflare Pages Functions under `/api/characters`. The Functions require `Authorization: Bearer <Supabase access token>`, use only the Supabase URL plus anon/publishable key, and let Supabase RLS make the final authorization decision. Character removal is logical only: archive requests set `is_archived = true`.
 
+Room, scene, and RP message mutations also run through Pages Functions:
+
+- `/api/rooms` and `/api/rooms/:id`
+- `/api/scenes` and `/api/scenes/:id`
+- `/api/messages` and `/api/messages/:id`
+
+These endpoints validate payloads, forward the user's Bearer JWT to Supabase, and rely on RLS for final authorization.
+
 ## Access Model
 
 - A user must be authenticated.

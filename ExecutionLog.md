@@ -32,3 +32,4 @@
 - Reworked the room menu so the top-level room tab opens a room list, moved room settings behind each room gear button, added scene time labels, and changed posting controls to character name or `中の人`.
 - Removed the separate top-level scene menu and folded scene listing, creation, and creator-only settings into the selected room menu.
 - Restricted login UI and active allowlist checks to Discord OAuth, added room-level scene create/delete delegation, scene-level edit delegation, and Discord profile display in My Page.
+- Moved room, scene, and RP message mutations behind Cloudflare Pages Functions and changed room/scene settings to tabbed modal dialogs.

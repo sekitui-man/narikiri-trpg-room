@@ -53,7 +53,7 @@ export async function archiveCharacterApi(roomId: string, characterId: string) {
   });
 }
 
-async function apiRequest(path: string, init: RequestInit = {}) {
+export async function apiRequest(path: string, init: RequestInit = {}) {
   if (!supabase) throw new Error('Supabase is not configured');
   const {
     data: { session },

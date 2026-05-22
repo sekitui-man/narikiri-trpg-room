@@ -380,6 +380,62 @@ select:focus {
   gap: 16px;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(9 9 9 / 0.32);
+}
+
+.modal-panel {
+  width: min(100%, 760px);
+  max-height: min(86vh, 820px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--surface);
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modal-header p {
+  margin: 0 0 6px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--primary);
+  font-size: 24px;
+  line-height: 29px;
+  font-weight: 700;
+}
+
+.modal-tabs {
+  max-width: 360px;
+}
+
+.modal-body {
+  display: grid;
+  gap: 16px;
+}
+
 .tool-panel-header p {
   margin: 0 0 6px;
   color: var(--secondary);

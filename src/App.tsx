@@ -42,6 +42,16 @@ import {
   updateCharacterApi,
   type CharacterRow,
 } from './characterApi';
+import {
+  createMessageApi,
+  createRoomApi,
+  createSceneApi,
+  deleteMessageApi,
+  deleteSceneApi,
+  updateMessageApi,
+  updateRoomApi,
+  updateSceneApi,
+} from './roomApi';
 import { demoCharacters, demoMessages, demoRooms, demoScenes } from './demoData';
 import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSkillMap, Room, RpMessage, Scene } from './types';
 
@@ -49,6 +59,8 @@ type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
 type ViewMode = 'room' | 'rooms' | 'my-page' | 'tools';
 type LogFormat = 'chat' | 'script' | 'markdown';
+type RoomSettingsTab = 'basic' | 'permissions';
+type SceneSettingsTab = 'basic' | 'permissions';
 type SceneMapRecord = {
   sceneId: string;
   imageUrl: string;
@@ -165,6 +177,8 @@ export function App() {
   const [sceneDraft, setSceneDraft] = useState<SceneDraft>(demoScenes[0]);
   const [isRoomConfigOpen, setIsRoomConfigOpen] = useState(false);
   const [configuredSceneId, setConfiguredSceneId] = useState<string | null>(null);
+  const [roomSettingsTab, setRoomSettingsTab] = useState<RoomSettingsTab>('basic');
+  const [sceneSettingsTab, setSceneSettingsTab] = useState<SceneSettingsTab>('basic');
   const [sceneMaps, setSceneMaps] = useState<SceneMapRecord[]>([]);
   const sceneMapsRef = useRef<SceneMapRecord[]>([]);
   const [mapPinLabel, setMapPinLabel] = useState('');
@@ -535,25 +549,7 @@ export function App() {
     }
 
     if (remoteMessages) {
-      setMessages(
-        remoteMessages.map((message) => {
-          const characterRelation = Array.isArray(message.characters) ? message.characters[0] : message.characters;
-          const profileRelation = Array.isArray(message.profiles) ? message.profiles[0] : message.profiles;
-
-          return {
-            id: message.id,
-            characterId: message.character_id,
-            authorId: message.author_id,
-            author: characterRelation?.name ?? profileRelation?.display_name ?? 'Unknown',
-            mode: message.mode,
-            body: message.body,
-            createdAt: new Intl.DateTimeFormat('ja-JP', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }).format(new Date(message.created_at)),
-          };
-        }),
-      );
+      setMessages(remoteMessages.map(rowToMessage));
     }
 
     if (remoteRoomMembers) {
@@ -592,25 +588,7 @@ export function App() {
     }
 
     if (remoteMessages) {
-      setMessages(
-        remoteMessages.map((message) => {
-          const characterRelation = Array.isArray(message.characters) ? message.characters[0] : message.characters;
-          const profileRelation = Array.isArray(message.profiles) ? message.profiles[0] : message.profiles;
-
-          return {
-            id: message.id,
-            characterId: message.character_id,
-            authorId: message.author_id,
-            author: characterRelation?.name ?? profileRelation?.display_name ?? 'Unknown',
-            mode: message.mode,
-            body: message.body,
-            createdAt: new Intl.DateTimeFormat('ja-JP', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }).format(new Date(message.created_at)),
-          };
-        }),
-      );
+      setMessages(remoteMessages.map(rowToMessage));
     }
   }
 
@@ -644,40 +622,22 @@ export function App() {
     const trimmed = draft.trim();
     if (!trimmed) return;
 
-    if (supabase && authState === 'allowed' && selectedRoomId && currentUserId) {
-      const { data, error } = await supabase
-        .from('rp_messages')
-        .insert({
-          room_id: selectedRoomId,
-          scene_id: selectedSceneId,
-          character_id: messageMode === 'ic' ? activeCharacter.id : null,
-          author_id: currentUserId,
+    if (supabase && authState === 'allowed' && selectedRoomId) {
+      try {
+        const row = await createMessageApi({
+          roomId: selectedRoomId,
+          sceneId: selectedSceneId,
+          characterId: messageMode === 'ic' ? activeCharacter.id : null,
           mode: messageMode,
           body: trimmed,
-        })
-        .select('id, created_at')
-        .single();
-
-      if (error) {
-        setAuthMessage(error.message);
+        });
+        setMessages((current) => [...current, rowToMessage(row)]);
+        setDraft('');
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : '発言を送信できませんでした。');
         return;
       }
-
-      const remoteMessage: RpMessage = {
-        id: data.id,
-        characterId: messageMode === 'ic' ? activeCharacter.id : null,
-        authorId: currentUserId,
-        author: messageMode === 'ic' ? activeCharacter.name : '中の人',
-        mode: messageMode,
-        body: trimmed,
-        createdAt: new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(
-          new Date(data.created_at),
-        ),
-      };
-
-      setMessages((current) => [...current, remoteMessage]);
-      setDraft('');
-      return;
     }
 
     const nextMessage: RpMessage = {
@@ -710,15 +670,16 @@ export function App() {
     const trimmed = editingMessageDraft.trim();
     if (!trimmed) return;
 
-    if (supabase && authState === 'allowed' && currentUserId) {
-      const { error } = await supabase
-        .from('rp_messages')
-        .update({ body: trimmed })
-        .eq('id', message.id)
-        .eq('author_id', currentUserId);
-
-      if (error) {
-        setAuthMessage(error.message);
+    if (supabase && authState === 'allowed') {
+      try {
+        const saved = rowToMessage(await updateMessageApi(message.id, trimmed));
+        setMessages((current) =>
+          current.map((currentMessage) => (currentMessage.id === saved.id ? saved : currentMessage)),
+        );
+        cancelEditMessage();
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : '発言を保存できませんでした。');
         return;
       }
     }
@@ -734,15 +695,11 @@ export function App() {
   async function deleteMessage(message: RpMessage) {
     if (!canManageMessage(message)) return;
 
-    if (supabase && authState === 'allowed' && currentUserId) {
-      const { error } = await supabase
-        .from('rp_messages')
-        .delete()
-        .eq('id', message.id)
-        .eq('author_id', currentUserId);
-
-      if (error) {
-        setAuthMessage(error.message);
+    if (supabase && authState === 'allowed') {
+      try {
+        await deleteMessageApi(message.id);
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : '発言を削除できませんでした。');
         return;
       }
     }
@@ -860,6 +817,38 @@ export function App() {
     });
   }
 
+  async function handleCreateRoom() {
+    const nextRoom: Room = {
+      id: crypto.randomUUID(),
+      title: '新規ルーム',
+      summary: '',
+      tags: [],
+      createdBy: activeActorId,
+    };
+
+    if (supabase && authState === 'allowed') {
+      try {
+        const created = rowToRoom(await createRoomApi(nextRoom));
+        setRooms((current) => [...current, created]);
+        setSelectedRoomId(created.id);
+        setRoomDraft(created);
+        setIsRoomConfigOpen(true);
+        setRoomSettingsTab('basic');
+        setAuthMessage('ルームを作成しました。');
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : 'ルームを作成できませんでした。');
+        return;
+      }
+    }
+
+    setRooms((current) => [...current, nextRoom]);
+    setSelectedRoomId(nextRoom.id);
+    setRoomDraft(nextRoom);
+    setIsRoomConfigOpen(true);
+    setRoomSettingsTab('basic');
+  }
+
   async function handleSaveRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextRoom = {
@@ -870,26 +859,16 @@ export function App() {
     };
 
     if (supabase && authState === 'allowed' && selectedRoomId && canEditActiveRoom) {
-      const { data, error } = await supabase
-        .from('rooms')
-        .update({
-          title: nextRoom.title,
-          summary: nextRoom.summary,
-          tags: nextRoom.tags,
-        })
-        .eq('id', selectedRoomId)
-        .select('id, title, summary, tags, created_by')
-        .single();
-
-      if (error) {
-        setAuthMessage(error.message);
+      try {
+        const saved = rowToRoom(await updateRoomApi(nextRoom));
+        setRooms((current) => current.map((room) => (room.id === saved.id ? saved : room)));
+        setRoomDraft(saved);
+        setAuthMessage('ルームを保存しました。');
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : 'ルームを保存できませんでした。');
         return;
       }
-      const saved = rowToRoom(data);
-      setRooms((current) => current.map((room) => (room.id === saved.id ? saved : room)));
-      setRoomDraft(saved);
-      setAuthMessage('ルームを保存しました。');
-      return;
     }
 
     setRooms((current) => current.map((room) => (room.id === nextRoom.id ? nextRoom : room)));
@@ -905,42 +884,29 @@ export function App() {
     const targetRoomId = activeRoom.id;
     const nextScene = createDefaultScene(targetRoomId, activeActorId);
 
-    if (supabase && authState === 'allowed' && targetRoomId && currentUserId) {
-      const { data, error } = await supabase
-        .from('scenes')
-        .insert({
-          room_id: targetRoomId,
-          created_by: currentUserId,
-          title: nextScene.title,
-          summary: nextScene.summary,
-          status: nextScene.status,
-          location_name: nextScene.locationName,
-          time_label: nextScene.timeLabel,
-          map_x: nextScene.mapX,
-          map_y: nextScene.mapY,
-          tags: nextScene.tags,
-        })
-        .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
-        .single();
-
-      if (error) {
-        setAuthMessage(error.message);
+    if (supabase && authState === 'allowed' && targetRoomId) {
+      try {
+        const created = rowToScene(await createSceneApi(nextScene));
+        setScenes((current) => [...current, created]);
+        setSelectedSceneId(created.id);
+        setSceneDraft(created);
+        setConfiguredSceneId(created.id);
+        setSceneSettingsTab('basic');
+        setSceneSettingsTab('basic');
+        setIsRoomConfigOpen(false);
+        setCurrentView('rooms');
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : 'シーンを作成できませんでした。');
         return;
       }
-      const created = rowToScene(data);
-      setScenes((current) => [...current, created]);
-      setSelectedSceneId(created.id);
-      setSceneDraft(created);
-      setConfiguredSceneId(created.id);
-      setIsRoomConfigOpen(false);
-      setCurrentView('rooms');
-      return;
     }
 
     setScenes((current) => [...current, nextScene]);
     setSelectedSceneId(nextScene.id);
     setSceneDraft(nextScene);
     setConfiguredSceneId(nextScene.id);
+    setSceneSettingsTab('basic');
     setIsRoomConfigOpen(false);
     setCurrentView('rooms');
   }
@@ -951,31 +917,16 @@ export function App() {
     const nextScene = normalizeScene(sceneDraft);
 
     if (supabase && authState === 'allowed' && selectedRoomId) {
-      const { data, error } = await supabase
-        .from('scenes')
-        .update({
-          title: nextScene.title,
-          summary: nextScene.summary,
-          status: nextScene.status,
-          location_name: nextScene.locationName,
-          time_label: nextScene.timeLabel,
-          map_x: nextScene.mapX,
-          map_y: nextScene.mapY,
-          tags: nextScene.tags,
-        })
-        .eq('id', nextScene.id)
-        .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
-        .single();
-
-      if (error) {
-        setAuthMessage(error.message);
+      try {
+        const saved = rowToScene(await updateSceneApi(nextScene));
+        setScenes((current) => current.map((scene) => (scene.id === saved.id ? saved : scene)));
+        setSceneDraft(saved);
+        setAuthMessage('シーンを保存しました。');
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : 'シーンを保存できませんでした。');
         return;
       }
-      const saved = rowToScene(data);
-      setScenes((current) => current.map((scene) => (scene.id === saved.id ? saved : scene)));
-      setSceneDraft(saved);
-      setAuthMessage('シーンを保存しました。');
-      return;
     }
 
     setScenes((current) => current.map((scene) => (scene.id === nextScene.id ? nextScene : scene)));
@@ -986,9 +937,10 @@ export function App() {
     if (!canDeleteScene(scene)) return;
 
     if (supabase && authState === 'allowed') {
-      const { error } = await supabase.from('scenes').delete().eq('id', scene.id);
-      if (error) {
-        setAuthMessage(error.message);
+      try {
+        await deleteSceneApi(scene.id);
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : 'シーンを削除できませんでした。');
         return;
       }
     }
@@ -1069,21 +1021,15 @@ export function App() {
     const nextScene = { ...scene, mapX: x, mapY: y, locationName: locationName || scene.locationName };
     if (supabase && authState === 'allowed') {
       if (!canEditSceneDraft) return;
-      const { data, error } = await supabase
-        .from('scenes')
-        .update({ map_x: x, map_y: y, location_name: nextScene.locationName })
-        .eq('id', scene.id)
-        .select('id, room_id, created_by, title, status, summary, location_name, time_label, map_x, map_y, tags, created_at')
-        .single();
-
-      if (error) {
-        setAuthMessage(error.message);
+      try {
+        const saved = rowToScene(await updateSceneApi(nextScene));
+        setScenes((current) => current.map((currentScene) => (currentScene.id === saved.id ? saved : currentScene)));
+        setSceneDraft(saved);
+        return;
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : 'シーン位置を保存できませんでした。');
         return;
       }
-      const saved = rowToScene(data);
-      setScenes((current) => current.map((currentScene) => (currentScene.id === saved.id ? saved : currentScene)));
-      setSceneDraft(saved);
-      return;
     }
 
     setScenes((current) => current.map((currentScene) => (currentScene.id === scene.id ? nextScene : currentScene)));
@@ -1178,6 +1124,10 @@ export function App() {
               <p>Room Menu</p>
               <h1>ルーム</h1>
             </div>
+            <button className="button-primary" type="button" onClick={handleCreateRoom}>
+              <Plus size={16} />
+              新規ルーム
+            </button>
           </div>
           <div className="management-grid">
             <aside className="character-manager-list" aria-label="ルーム一覧">
@@ -1211,7 +1161,8 @@ export function App() {
                         onClick={() => {
                           setSelectedRoomId(room.id);
                           setRoomDraft(room);
-                          setIsRoomConfigOpen((open) => (room.id === activeRoom.id ? !open : true));
+                          setRoomSettingsTab('basic');
+                          setIsRoomConfigOpen(true);
                         }}
                         aria-label="ルーム設定"
                       >
@@ -1222,7 +1173,7 @@ export function App() {
                 ))}
               </div>
             </aside>
-            {isRoomConfigOpen ? (
+            {false ? (
               <form className="tool-panel" onSubmit={handleSaveRoom}>
                 <div className="tool-panel-header">
                   <div>
@@ -1317,6 +1268,7 @@ export function App() {
                             onClick={() => {
                               setSelectedSceneId(scene.id);
                               setConfiguredSceneId(scene.id);
+                              setSceneSettingsTab('basic');
                             }}
                             aria-label="シーン設定"
                           >
@@ -1386,7 +1338,7 @@ export function App() {
                     </div>
                   </form>
                 )}
-                {configuredSceneId === sceneDraft.id && canEditSceneDraft ? (
+                {false ? (
                   <form className="inline-editor" onSubmit={handleSaveScene}>
                     <div className="tool-panel-header">
                       <div>
@@ -1520,7 +1472,14 @@ export function App() {
                         <h2>{activeScene.title}</h2>
                       </div>
                       {activeScene.createdBy === activeActorId && (
-                        <button className="button-secondary" type="button" onClick={() => setConfiguredSceneId(activeScene.id)}>
+                        <button
+                          className="button-secondary"
+                          type="button"
+                          onClick={() => {
+                            setConfiguredSceneId(activeScene.id);
+                            setSceneSettingsTab('basic');
+                          }}
+                        >
                           <Settings size={16} />
                           設定
                         </button>
@@ -1547,6 +1506,242 @@ export function App() {
               </section>
             )}
           </div>
+          {isRoomConfigOpen && (
+            <div className="modal-backdrop" role="presentation">
+              <section className="modal-panel" role="dialog" aria-modal="true" aria-label="ルーム設定">
+                <div className="modal-header">
+                  <div>
+                    <p>Room Settings</p>
+                    <h2>{roomDraft.title}</h2>
+                  </div>
+                  <button className="mini-icon-button" type="button" onClick={() => setIsRoomConfigOpen(false)} aria-label="閉じる">
+                    <X size={15} />
+                  </button>
+                </div>
+                <div className="segmented segmented-wide modal-tabs" aria-label="ルーム設定タブ">
+                  <button className={roomSettingsTab === 'basic' ? 'active' : ''} type="button" onClick={() => setRoomSettingsTab('basic')}>
+                    基本
+                  </button>
+                  <button
+                    className={roomSettingsTab === 'permissions' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setRoomSettingsTab('permissions')}
+                  >
+                    権限
+                  </button>
+                </div>
+                {roomSettingsTab === 'basic' ? (
+                  <form className="modal-body" onSubmit={handleSaveRoom}>
+                    <div className="field-grid two">
+                      <label>
+                        ルーム名
+                        <input
+                          value={roomDraft.title}
+                          onChange={(event) => setRoomDraft({ ...roomDraft, title: event.target.value })}
+                          disabled={!canEditActiveRoom}
+                        />
+                      </label>
+                      <label>
+                        タグ
+                        <input
+                          value={roomDraft.tags.join(', ')}
+                          onChange={(event) => setRoomDraft({ ...roomDraft, tags: parseTags(event.target.value) })}
+                          disabled={!canEditActiveRoom}
+                          placeholder="導入, 1920s, 雨"
+                        />
+                      </label>
+                    </div>
+                    <label className="full-label">
+                      概要
+                      <textarea
+                        value={roomDraft.summary}
+                        onChange={(event) => setRoomDraft({ ...roomDraft, summary: event.target.value })}
+                        disabled={!canEditActiveRoom}
+                      />
+                    </label>
+                    <div className="editor-actions compact">
+                      <button className="button-primary" type="submit" disabled={!canEditActiveRoom}>
+                        <Save size={16} />
+                        保存
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <form className="modal-body" onSubmit={handleSaveRoomScenePermission}>
+                    <div className="field-grid three">
+                      <label>
+                        対象ユーザ
+                        <select
+                          value={selectedRoomPermissionUserId}
+                          onChange={(event) => setSelectedRoomPermissionUserId(event.target.value)}
+                          disabled={!canManageRoomScenePermissions}
+                        >
+                          {activeRoomMembers.map((member) => (
+                            <option key={member.userId} value={member.userId}>
+                              {member.displayName} / {member.role}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={roomPermissionDraft.canCreateScenes}
+                          onChange={(event) =>
+                            setRoomPermissionDraft({ ...roomPermissionDraft, canCreateScenes: event.target.checked })
+                          }
+                          disabled={!canManageRoomScenePermissions}
+                        />
+                        シーン作成
+                      </label>
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={roomPermissionDraft.canDeleteScenes}
+                          onChange={(event) =>
+                            setRoomPermissionDraft({ ...roomPermissionDraft, canDeleteScenes: event.target.checked })
+                          }
+                          disabled={!canManageRoomScenePermissions}
+                        />
+                        シーン削除
+                      </label>
+                    </div>
+                    <div className="editor-actions compact">
+                      <button
+                        className="button-primary"
+                        type="submit"
+                        disabled={!selectedRoomPermissionUserId || !canManageRoomScenePermissions}
+                      >
+                        <Save size={16} />
+                        保存
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </section>
+            </div>
+          )}
+          {configuredSceneId === sceneDraft.id && canEditSceneDraft && (
+            <div className="modal-backdrop" role="presentation">
+              <section className="modal-panel" role="dialog" aria-modal="true" aria-label="シーン設定">
+                <div className="modal-header">
+                  <div>
+                    <p>Scene Settings</p>
+                    <h2>{sceneDraft.title}</h2>
+                  </div>
+                  <button className="mini-icon-button" type="button" onClick={() => setConfiguredSceneId(null)} aria-label="閉じる">
+                    <X size={15} />
+                  </button>
+                </div>
+                <div className="segmented segmented-wide modal-tabs" aria-label="シーン設定タブ">
+                  <button className={sceneSettingsTab === 'basic' ? 'active' : ''} type="button" onClick={() => setSceneSettingsTab('basic')}>
+                    基本
+                  </button>
+                  <button
+                    className={sceneSettingsTab === 'permissions' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setSceneSettingsTab('permissions')}
+                  >
+                    権限
+                  </button>
+                </div>
+                {sceneSettingsTab === 'basic' ? (
+                  <form className="modal-body" onSubmit={handleSaveScene}>
+                    <div className="field-grid two">
+                      <label>
+                        シーン名
+                        <input
+                          value={sceneDraft.title}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, title: event.target.value })}
+                          disabled={!canEditSceneDraft}
+                        />
+                      </label>
+                      <label>
+                        場所
+                        <input
+                          value={sceneDraft.locationName}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, locationName: event.target.value })}
+                          disabled={!canEditSceneDraft}
+                        />
+                      </label>
+                      <label>
+                        時間
+                        <input
+                          value={sceneDraft.timeLabel}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, timeLabel: event.target.value })}
+                          disabled={!canEditSceneDraft}
+                        />
+                      </label>
+                      <label>
+                        状態
+                        <select
+                          value={sceneDraft.status}
+                          onChange={(event) =>
+                            setSceneDraft({ ...sceneDraft, status: event.target.value as Scene['status'] })
+                          }
+                          disabled={!canEditSceneDraft}
+                        >
+                          <option value="active">active</option>
+                          <option value="paused">paused</option>
+                          <option value="archived">archived</option>
+                        </select>
+                      </label>
+                      <label>
+                        タグ
+                        <input
+                          value={sceneDraft.tags.join(', ')}
+                          onChange={(event) => setSceneDraft({ ...sceneDraft, tags: parseTags(event.target.value) })}
+                          disabled={!canEditSceneDraft}
+                        />
+                      </label>
+                    </div>
+                    <label className="full-label">
+                      概要
+                      <textarea
+                        value={sceneDraft.summary}
+                        onChange={(event) => setSceneDraft({ ...sceneDraft, summary: event.target.value })}
+                        disabled={!canEditSceneDraft}
+                      />
+                    </label>
+                    <div className="editor-actions compact">
+                      <button className="button-primary" type="submit" disabled={!canEditSceneDraft}>
+                        <Save size={16} />
+                        保存
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="modal-body">
+                    <div className="field-grid two">
+                      <label>
+                        編集を許可するユーザ
+                        <select
+                          value={selectedSceneEditorUserId}
+                          onChange={(event) => setSelectedSceneEditorUserId(event.target.value)}
+                          disabled={!canGrantSceneDraftEditors}
+                        >
+                          {activeRoomMembers.map((member) => (
+                            <option key={member.userId} value={member.userId}>
+                              {member.displayName} / {member.role}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="button-secondary permission-button"
+                        type="button"
+                        onClick={handleGrantSceneEditor}
+                        disabled={!selectedSceneEditorUserId || !canGrantSceneDraftEditors}
+                      >
+                        <UsersRound size={16} />
+                        編集許可
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
         </section>
       ) : currentView === 'my-page' ? (
         <section className="my-page" aria-label="マイページ">
@@ -2313,6 +2508,33 @@ function rowToSceneEditPermission(row: { scene_id: string; user_id: string }): S
 
 function isAccessRole(role: string | null | undefined): role is AccessRole {
   return role === 'owner' || role === 'gm' || role === 'player' || role === 'viewer';
+}
+
+function rowToMessage(message: {
+  id: string;
+  character_id: string | null;
+  author_id: string | null;
+  mode: string;
+  body: string;
+  created_at: string;
+  characters?: { name?: string | null } | Array<{ name?: string | null }> | null;
+  profiles?: { display_name?: string | null } | Array<{ display_name?: string | null }> | null;
+}): RpMessage {
+  const characterRelation = Array.isArray(message.characters) ? message.characters[0] : message.characters;
+  const profileRelation = Array.isArray(message.profiles) ? message.profiles[0] : message.profiles;
+
+  return {
+    id: message.id,
+    characterId: message.character_id,
+    authorId: message.author_id,
+    author: characterRelation?.name ?? profileRelation?.display_name ?? 'Unknown',
+    mode: message.mode === 'ooc' ? 'ooc' : 'ic',
+    body: message.body,
+    createdAt: new Intl.DateTimeFormat('ja-JP', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(message.created_at)),
+  };
 }
 
 function rowToScene(scene: {
