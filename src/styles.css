@@ -846,6 +846,16 @@ select:focus {
   letter-spacing: 0.02em;
 }
 
+.empty-state {
+  margin: 0;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
 .read-field {
   display: grid;
   gap: 6px;

@@ -142,33 +142,58 @@ const defaultBackground: CoCBackground = {
   encounters: '',
 };
 
+const emptyRoom: Room = {
+  id: '',
+  title: 'ルーム未選択',
+  summary: '',
+  tags: [],
+  createdBy: null,
+};
+
+const emptyScene: Scene = {
+  id: '',
+  roomId: null,
+  createdBy: null,
+  title: 'シーン未選択',
+  status: 'active',
+  summary: '',
+  locationName: '',
+  timeLabel: '',
+  mapX: null,
+  mapY: null,
+  tags: [],
+  createdAt: null,
+};
+
 export function App() {
   const [authState, setAuthState] = useState<AuthState>(isSupabaseConfigured ? 'checking' : 'demo');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState('');
   const [currentAccessRole, setCurrentAccessRole] = useState<AccessRole | null>(null);
   const [discordProfile, setDiscordProfile] = useState<DiscordProfile | null>(null);
-  const [rooms, setRooms] = useState<Room[]>(demoRooms);
-  const [characters, setCharacters] = useState<Character[]>(demoCharacters);
-  const [scenes, setScenes] = useState<Scene[]>(demoScenes);
-  const [messages, setMessages] = useState<RpMessage[]>(demoMessages);
-  const [roomMembers, setRoomMembers] = useState<RoomMember[]>(demoRoomMembers);
+  const [rooms, setRooms] = useState<Room[]>(() => (isSupabaseConfigured ? [] : demoRooms));
+  const [characters, setCharacters] = useState<Character[]>(() => (isSupabaseConfigured ? [] : demoCharacters));
+  const [scenes, setScenes] = useState<Scene[]>(() => (isSupabaseConfigured ? [] : demoScenes));
+  const [messages, setMessages] = useState<RpMessage[]>(() => (isSupabaseConfigured ? [] : demoMessages));
+  const [roomMembers, setRoomMembers] = useState<RoomMember[]>(() => (isSupabaseConfigured ? [] : demoRoomMembers));
   const [roomScenePermissions, setRoomScenePermissions] = useState<RoomScenePermission[]>([]);
   const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(new Set());
   const [sceneEditPermissions, setSceneEditPermissions] = useState<SceneEditPermission[]>([]);
   const [selectedRoomPermissionUserId, setSelectedRoomPermissionUserId] = useState('');
   const [roomPermissionDraft, setRoomPermissionDraft] = useState({ canCreateScenes: false, canDeleteScenes: false });
   const [selectedSceneEditorUserId, setSelectedSceneEditorUserId] = useState('');
-  const [selectedCharacterId, setSelectedCharacterId] = useState(characters[0].id);
-  const [selectedSceneId, setSelectedSceneId] = useState(scenes[0].id);
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(demoRooms[0].id);
-  const [currentView, setCurrentView] = useState<ViewMode>('room');
+  const [selectedCharacterId, setSelectedCharacterId] = useState(isSupabaseConfigured ? '' : demoCharacters[0].id);
+  const [selectedSceneId, setSelectedSceneId] = useState(isSupabaseConfigured ? '' : demoScenes[0].id);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(isSupabaseConfigured ? null : demoRooms[0].id);
+  const [currentView, setCurrentView] = useState<ViewMode>(isSupabaseConfigured ? 'rooms' : 'room');
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageDraft, setEditingMessageDraft] = useState('');
-  const [characterDraft, setCharacterDraft] = useState<Character>(demoCharacters[0]);
-  const [roomDraft, setRoomDraft] = useState<Room>(demoRooms[0]);
-  const [sceneDraft, setSceneDraft] = useState<SceneDraft>(demoScenes[0]);
+  const [characterDraft, setCharacterDraft] = useState<Character>(() =>
+    isSupabaseConfigured ? createDefaultCharacter(null) : demoCharacters[0],
+  );
+  const [roomDraft, setRoomDraft] = useState<Room>(() => (isSupabaseConfigured ? emptyRoom : demoRooms[0]));
+  const [sceneDraft, setSceneDraft] = useState<SceneDraft>(() => (isSupabaseConfigured ? emptyScene : demoScenes[0]));
   const [isRoomConfigOpen, setIsRoomConfigOpen] = useState(false);
   const [configuredSceneId, setConfiguredSceneId] = useState<string | null>(null);
   const [roomSettingsTab, setRoomSettingsTab] = useState<RoomSettingsTab>('basic');
@@ -194,9 +219,9 @@ export function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0];
-  const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
-  const activeRoom = rooms.find((room) => room.id === selectedRoomId) ?? rooms[0];
+  const activeCharacter = characters.find((character) => character.id === selectedCharacterId) ?? characters[0] ?? characterDraft;
+  const activeScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0] ?? emptyScene;
+  const activeRoom = rooms.find((room) => room.id === selectedRoomId) ?? rooms[0] ?? emptyRoom;
   const roomScenes = scenes.filter((scene) => scene.roomId === activeRoom.id);
   const activeActorId = currentUserId ?? (authState === 'demo' ? demoUserId : null);
   const activeRoomMembers = roomMembers.filter((member) => member.roomId === activeRoom.id && member.userId !== currentUserId);
@@ -385,96 +410,6 @@ export function App() {
       display_name: allowedMember.display_name,
       updated_at: new Date().toISOString(),
     });
-
-    const { data: rooms, error: roomsError } = await supabase
-      .from('rooms')
-      .select('id')
-      .order('created_at', { ascending: true })
-      .limit(1);
-
-    if (roomsError || rooms?.length) {
-      if (roomsError) setAuthMessage(roomsError.message);
-      return;
-    }
-
-    if (!['owner', 'gm'].includes(allowedMember.role)) return;
-
-    const { data: room, error: roomError } = await supabase
-      .from('rooms')
-      .insert({
-        title: '夜明け前の酒場',
-        summary: '雨音が屋根を打つ。閉店後の酒場に、まだ灯りがひとつ残っている。',
-        created_by: userId,
-      })
-      .select('id')
-      .single();
-
-    if (roomError || !room) {
-      setAuthMessage(roomError?.message ?? '初期ルームを作成できませんでした。');
-      return;
-    }
-
-    const bootstrapRole = allowedMember.role === 'gm' ? 'gm' : 'owner';
-    const { error: memberError } = await supabase.from('room_members').insert({
-      room_id: room.id,
-      user_id: userId,
-      role: bootstrapRole,
-    });
-
-    if (memberError) {
-      setAuthMessage(memberError.message);
-      return;
-    }
-
-    await Promise.all([
-      supabase.from('scenes').insert({
-        room_id: room.id,
-        created_by: userId,
-        title: '夜明け前の酒場',
-        summary: '雨音が屋根を打つ。閉店後の酒場に、まだ灯りがひとつ残っている。',
-        location_name: '酒場',
-        time_label: '深夜',
-        tags: ['導入', '屋内'],
-        status: 'active',
-      }),
-      supabase.from('characters').insert([
-        {
-          room_id: room.id,
-          owner_id: userId,
-          name: '蓮',
-          player_name: allowedMember.display_name,
-          archetype: '私立探偵',
-          color: '#000000',
-          memo: '表向きは酒場の常連。相手の嘘に気づいても、すぐには指摘しない。',
-          occupation: '私立探偵',
-          age: '32',
-          gender: '男性',
-          residence: '東京',
-          birthplace: '横浜',
-          characteristics: defaultCharacteristics,
-          skills: createSkillMap(defaultCharacteristics, { 目星: 65, 聞き耳: 55, 図書館: 60, 心理学: 45, 説得: 50 }),
-          weapons: 'こぶし 50%, 拳銃 40%',
-          possessions: '手帳、万年筆、古い鍵',
-          background: defaultBackground,
-          sanity_current: 50,
-          hit_points_current: 10,
-          magic_points_current: 10,
-        },
-        {
-          room_id: room.id,
-          owner_id: null,
-          name: '語り手',
-          player_name: 'GM',
-          archetype: '進行',
-          color: '#666666',
-          memo: '場面描写、NPC、判定結果を担当する。',
-          occupation: 'NPC',
-          characteristics: defaultCharacteristics,
-          skills: createSkillMap(defaultCharacteristics),
-          background: defaultBackground,
-        },
-      ]),
-    ]);
   }
 
   async function loadRoomData(userId: string, profileKey: string, allowedMember: AllowedMember) {
@@ -499,7 +434,21 @@ export function App() {
 
     const firstRoom = rooms?.[0];
     if (!firstRoom) {
-      setAuthMessage('アクセス可能なルームがまだありません。room_members に追加してください。');
+      setRooms([]);
+      setScenes([]);
+      setCharacters([]);
+      setMessages([]);
+      setRoomMembers([]);
+      setRoomScenePermissions([]);
+      setSceneEditPermissions([]);
+      setSelectedRoomId(null);
+      setSelectedSceneId('');
+      setSelectedCharacterId('');
+      setRoomDraft(emptyRoom);
+      setSceneDraft(emptyScene);
+      setCharacterDraft(createDefaultCharacter(userId));
+      setCurrentView('rooms');
+      setAuthMessage('アクセス可能なルームはまだありません。新規ルームを作成してください。');
       return;
     }
 
@@ -545,22 +494,17 @@ export function App() {
         .select('scene_id, user_id'),
     ]);
 
-    if (remoteScenes?.length) {
-      const mappedScenes = remoteScenes.map(rowToScene);
-      setScenes(mappedScenes);
-      setSelectedSceneId(mappedScenes[0].id);
-      setSceneDraft(mappedScenes[0]);
-    }
+    const mappedScenes = remoteScenes?.map(rowToScene) ?? [];
+    setScenes(mappedScenes);
+    setSelectedSceneId(mappedScenes[0]?.id ?? '');
+    setSceneDraft(mappedScenes[0] ?? createDefaultScene(firstRoom.id, userId));
 
-    if (remoteCharacters?.length) {
-      const mappedCharacters = remoteCharacters.map(rowToCharacter);
-      setCharacters(mappedCharacters);
-      setSelectedCharacterId(mappedCharacters[0].id);
-    }
+    const mappedCharacters = remoteCharacters?.map(rowToCharacter) ?? [];
+    setCharacters(mappedCharacters);
+    setSelectedCharacterId(mappedCharacters[0]?.id ?? '');
+    setCharacterDraft(mappedCharacters[0] ?? createDefaultCharacter(userId));
 
-    if (remoteMessages) {
-      setMessages(remoteMessages.map(rowToMessage));
-    }
+    setMessages(remoteMessages?.map(rowToMessage) ?? []);
 
     if (remoteRoomMembers) {
       setRoomMembers(remoteRoomMembers.map(rowToRoomMember));
@@ -595,11 +539,14 @@ export function App() {
       const mappedCharacters = remoteCharacters.map(rowToCharacter);
       setCharacters(mappedCharacters);
       setSelectedCharacterId(mappedCharacters[0].id);
+      setCharacterDraft(mappedCharacters[0]);
+    } else {
+      setCharacters([]);
+      setSelectedCharacterId('');
+      setCharacterDraft(createDefaultCharacter(currentUserId));
     }
 
-    if (remoteMessages) {
-      setMessages(remoteMessages.map(rowToMessage));
-    }
+    setMessages(remoteMessages?.map(rowToMessage) ?? []);
   }
 
   async function handleDiscordSignIn() {
@@ -1155,7 +1102,9 @@ export function App() {
                 ルーム一覧
               </div>
               <div className="room-card-list">
-                {rooms.map((room) => {
+                {rooms.length === 0 ? (
+                  <p className="empty-state">ルームはまだありません。右上の新規ルームから作成してください。</p>
+                ) : rooms.map((room) => {
                   const roomListScenes = scenes.filter((scene) => scene.roomId === room.id);
                   const isExpanded = expandedRoomIds.has(room.id);
                   return (

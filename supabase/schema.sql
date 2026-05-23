@@ -429,11 +429,12 @@ with check (
   and (discord_user_id is null or discord_user_id = app_private.current_discord_user_id())
 );
 
+drop policy if exists "Room members can read rooms" on public.rooms;
 create policy "Room members can read rooms"
 on public.rooms
 for select
 to authenticated
-using (app_private.is_room_member(id));
+using (app_private.is_room_member(id) or created_by = (select auth.uid()));
 
 create policy "Allowed users can create rooms"
 on public.rooms

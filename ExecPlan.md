@@ -20,7 +20,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - "指定した人間だけ" means users whose Discord provider ID exists in `public.allowed_discord_accounts`, and whose user id is a member of a room.
 - Alpha authentication uses Supabase Auth Discord OAuth only; the app UI does not expose email/password or Magic Link login.
 - When Supabase env vars are missing, the app runs in local demo mode so the interface can be reviewed without a backend.
-- The first room and sample data are represented in frontend demo state; real production data comes from Supabase tables after applying the SQL.
+- Sample rooms, scenes, characters, and messages are shown only in local demo mode when Supabase is not configured. Supabase-configured environments must start from empty state until real database rows load.
 - Deployment target is Cloudflare Pages.
 - Supabase backend should be a new project, not colocated with existing projects.
 - Drive "login information" means access ledger fields such as email, display name, role, status, and notes. Passwords must not be stored in Drive.
@@ -49,6 +49,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - My Page shows the signed-in Discord profile from Supabase Auth identity data.
 - My Page exposes a Discord allowlist form only to `owner` users. Owner-created entries are still enforced by `allowed_discord_accounts` RLS.
 - Frontend code must not call backend room-scoped APIs unless the selected room id is a UUID; demo room ids are local-only.
+- Production sign-in must not bootstrap or seed a test room automatically; owners create the first real room explicitly from the room menu.
 - RP message editing and deletion are author-only operations. The UI only exposes controls for the current user's messages, and RLS restricts update/delete to rows where `author_id = auth.uid()`.
 - RP messages are stored in Supabase and subscribed through Supabase Realtime by room. Insert/update/delete changes trigger a room message refresh so other clients see conversation changes without manual reload.
 - The posting UI does not expose IC/OOC terminology. Users choose either a character name for character speech/action or `中の人` for player-side discussion; the database still stores this as `ic` or `ooc` internally.
