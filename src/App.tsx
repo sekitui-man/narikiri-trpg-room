@@ -160,6 +160,7 @@ export function App() {
   const [selectedAdminAccountId, setSelectedAdminAccountId] = useState<string | null>(null);
   const [adminDetailDraft, setAdminDetailDraft] = useState<{ role: AccessRole; isActive: boolean } | null>(null);
   const [profileDraft, setProfileDraft] = useState({ displayName: '' });
+  const [showArchivedCharacters, setShowArchivedCharacters] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -726,9 +727,12 @@ export function App() {
     }
 
     setCharacters((current) => {
-      const nextCharacters = current.filter((character) => character.id !== activeCharacter.id);
-      setSelectedCharacterId(nextCharacters[0]?.id ?? demoCharacters[0].id);
-      return nextCharacters.length ? nextCharacters : [createDefaultCharacter(currentUserId)];
+      const nextCharacters = current.map((character) =>
+        character.id === activeCharacter.id ? { ...character, isArchived: true } : character,
+      );
+      const visibleCharacters = nextCharacters.filter((c) => !c.isArchived);
+      setSelectedCharacterId(visibleCharacters[0]?.id ?? '');
+      return nextCharacters;
     });
   }
 
@@ -2028,28 +2032,38 @@ export function App() {
                 <UsersRound size={16} />
                 探索者一覧
               </div>
+              <label className="archive-filter-toggle">
+                <input
+                  type="checkbox"
+                  checked={showArchivedCharacters}
+                  onChange={(e) => setShowArchivedCharacters(e.target.checked)}
+                />
+                アーカイブ済みを表示
+              </label>
               <div className="character-list">
-                {characters.length === 0 ? (
+                {characters.filter((c) => showArchivedCharacters || !c.isArchived).length === 0 ? (
                   <p className="empty-state">探索者はまだありません。右上のプラスマークから作成してください。</p>
                 ) : (
-                  characters.map((character) => (
-                    <button
-                      className={character.id === selectedCharacterId ? 'character-item selected' : 'character-item'}
-                      key={character.id}
-                      type="button"
-                      onClick={() => setSelectedCharacterId(character.id)}
-                    >
-                      <span className="avatar" style={{ backgroundColor: character.color }} />
-                      <span>
-                        <strong>{character.name}</strong>
-                        <small>{character.archetype || '探索者'}</small>
-                      </span>
-                    </button>
-                  ))
+                  characters
+                    .filter((c) => showArchivedCharacters || !c.isArchived)
+                    .map((character) => (
+                      <button
+                        className={`${character.id === selectedCharacterId ? 'character-item selected' : 'character-item'}${character.isArchived ? ' archived' : ''}`}
+                        key={character.id}
+                        type="button"
+                        onClick={() => setSelectedCharacterId(character.id)}
+                      >
+                        <span className="avatar" style={{ backgroundColor: character.color }} />
+                        <span>
+                          <strong>{character.name}</strong>
+                          <small>{character.isArchived ? 'アーカイブ済み' : (character.archetype || '探索者')}</small>
+                        </span>
+                      </button>
+                    ))
                 )}
               </div>
             </aside>
-            {characters.length > 0 ? (
+            {characters.filter((c) => showArchivedCharacters || !c.isArchived).length > 0 ? (
               <CharacterEditor
                 activeDerived={activeDerived}
                 canArchiveCharacter

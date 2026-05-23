@@ -654,6 +654,25 @@ select:focus {
 }
 
 .scene-list,
+.archive-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--secondary);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.archive-filter-toggle input[type='checkbox'] {
+  accent-color: var(--accent, #666);
+  cursor: pointer;
+}
+
+.character-item.archived {
+  opacity: 0.5;
+}
+
 .character-list {
   display: grid;
   gap: 6px;

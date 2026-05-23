@@ -55,13 +55,13 @@ class ApiError extends Error {
 
 export async function listCharacters(context: PagesContext) {
   const { supabase } = await createAuthenticatedSupabase(context);
-  const roomId = requireUuid(new URL(context.request.url).searchParams.get('roomId'), 'roomId');
+  const url = new URL(context.request.url);
+  const roomId = requireUuid(url.searchParams.get('roomId'), 'roomId');
 
   const { data, error } = await supabase
     .from('characters')
     .select(characterColumns)
     .eq('room_id', roomId)
-    .eq('is_archived', false)
     .order('created_at', { ascending: true });
 
   if (error) throw new ApiError(400, error.message);
@@ -114,16 +114,14 @@ export async function archiveCharacter(context: PagesContext) {
   const body = await readJsonObject(context.request);
   const roomId = requireUuid(body.roomId, 'roomId');
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('characters')
     .update({ is_archived: true })
     .eq('id', id)
-    .eq('room_id', roomId)
-    .select('id')
-    .single();
+    .eq('room_id', roomId);
 
   if (error) throw new ApiError(400, error.message);
-  return json({ archived: true, id: data.id });
+  return json({ archived: true, id });
 }
 
 export function handleApiError(error: unknown) {
