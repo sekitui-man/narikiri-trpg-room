@@ -1773,7 +1773,7 @@ export function App() {
             </div>
           )}
         </section>
-      ) : currentView === 'admin' ? (
+      ) : currentView === 'admin' && currentAccessRole === 'owner' ? (
         <section className="management-page" aria-label="管理者ページ">
           <div className="my-page-header">
             <div>
