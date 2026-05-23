@@ -1072,8 +1072,7 @@ select:focus {
 .composer-controls {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(180px, 240px) auto;
-  gap: 16px;
+  grid-template-columns: minmax(180px, 240px);
   align-items: center;
 }
 

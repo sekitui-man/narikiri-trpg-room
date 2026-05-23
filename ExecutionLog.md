@@ -46,3 +46,4 @@
 - Marked allowlisted Discord accounts that have not logged in yet with a compact login-state pictogram in the owner user management UI.
 - Widened the in-room left navigation rail and collapsed reopen tab across responsive breakpoints so the tab does not feel cramped on narrower screens.
 - Removed the centered max-width constraint from the in-room workspace so the navigation rail and memo panel align to the viewport edges on wide screens.
+- Removed the redundant composer mode chip because the selected speaker already indicates whether the post is character-side or player-side.

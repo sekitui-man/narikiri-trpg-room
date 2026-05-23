@@ -2141,7 +2141,6 @@ export function App() {
                   </option>
                 ))}
               </select>
-              <span className="access-chip">{messageMode === 'ic' ? 'キャラクター発言' : '中の人'}</span>
             </div>
             <p className="mode-help">キャラ名を選ぶとキャラクター発言、中の人を選ぶとプレイヤー発言です。</p>
             <textarea
