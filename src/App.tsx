@@ -138,7 +138,7 @@ export function App() {
   const [selectedCharacterId, setSelectedCharacterId] = useState(isSupabaseConfigured ? '' : demoCharacters[0].id);
   const [selectedSceneId, setSelectedSceneId] = useState(isSupabaseConfigured ? '' : demoScenes[0].id);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(isSupabaseConfigured ? null : demoRooms[0].id);
-  const [currentView, setCurrentView] = useState<ViewMode>(isSupabaseConfigured ? 'rooms' : 'room');
+  const [currentView, setCurrentView] = useState<ViewMode>(isSupabaseConfigured ? 'home' : 'room');
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageDraft, setEditingMessageDraft] = useState('');
@@ -1169,7 +1169,7 @@ export function App() {
         onHome={() => {
           setIsRoomConfigOpen(false);
           setConfiguredSceneId(null);
-          setCurrentView('rooms');
+          setCurrentView('home');
         }}
         onMyPage={() => setCurrentView('my-page')}
         onRooms={() => {
@@ -1180,7 +1180,45 @@ export function App() {
         onSignOut={handleSignOut}
       />
 
-      {currentView === 'rooms' ? (
+      {currentView === 'home' ? (
+        <section className="landing-page" aria-label="トップページ">
+          <div className="landing-hero">
+            <div className="landing-hero-badge">TRPG セッション管理ツール</div>
+            <h1 className="landing-hero-title">Narikiri<br />TRPG Room</h1>
+            <p className="landing-hero-desc">
+              キャラクター、シーン、メッセージを一元管理。<br />
+              オンラインTRPGセッションをもっとスムーズに。
+            </p>
+            <div className="landing-hero-actions">
+              <button className="button-primary landing-cta" type="button" onClick={() => { setIsRoomConfigOpen(false); setCurrentView('rooms'); }}>
+                <MessageSquareText size={18} />
+                ルームを見る
+              </button>
+              <button className="button-secondary landing-cta" type="button" onClick={() => setCurrentView('my-page')}>
+                <UserRound size={18} />
+                マイページ
+              </button>
+            </div>
+          </div>
+          <div className="landing-features">
+            <div className="landing-feature-card">
+              <span className="landing-feature-icon"><MessageSquareText size={22} /></span>
+              <strong>ルーム &amp; シーン管理</strong>
+              <p>複数のTRPGルームとシーンをまとめて管理できます。GMとプレイヤーの権限を細かく設定可能。</p>
+            </div>
+            <div className="landing-feature-card">
+              <span className="landing-feature-icon"><UsersRound size={22} /></span>
+              <strong>キャラクターシート</strong>
+              <p>クトゥルフ神話TRPGに対応した探索者シートを作成・共有。ステータスを自動計算します。</p>
+            </div>
+            <div className="landing-feature-card">
+              <span className="landing-feature-icon"><MessageCircle size={22} /></span>
+              <strong>Discordアカウント連携</strong>
+              <p>Discordアカウントでログインし、プロフィールをそのまま利用できます。</p>
+            </div>
+          </div>
+        </section>
+      ) : currentView === 'rooms' ? (
         <section className="management-page" aria-label="ルームメニュー">
           <div className="my-page-header">
             <div>
@@ -1944,7 +1982,11 @@ export function App() {
             </button>
             <button className="menu-card-button" type="button" onClick={() => setCurrentView('profile-edit')}>
               <span className="menu-card-icon">
-                <UserRound size={20} />
+                {discordProfile?.avatarUrl ? (
+                  <img src={discordProfile.avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '9999px', objectFit: 'cover' }} />
+                ) : (
+                  <UserRound size={20} />
+                )}
               </span>
               <span>
                 <strong>プロフィール編集</strong>

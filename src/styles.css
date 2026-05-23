@@ -298,6 +298,99 @@ select:focus {
   padding-left: 68px;
 }
 
+.landing-page {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: 64px 32px 80px;
+}
+
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 64px 0 72px;
+}
+
+.landing-hero-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--secondary);
+  letter-spacing: 0.06em;
+  margin-bottom: 28px;
+}
+
+.landing-hero-title {
+  margin: 0 0 24px;
+  font-size: clamp(48px, 8vw, 80px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--primary);
+}
+
+.landing-hero-desc {
+  margin: 0 0 40px;
+  font-size: 18px;
+  line-height: 1.75;
+  color: var(--secondary);
+  max-width: 480px;
+}
+
+.landing-hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.landing-cta {
+  padding: 12px 24px;
+  font-size: 15px;
+  gap: 8px;
+}
+
+.landing-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.landing-feature-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px 24px;
+  background: var(--surface);
+}
+
+.landing-feature-card strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.landing-feature-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--secondary);
+}
+
+.landing-feature-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--neutral);
+}
+
 .my-page {
   width: min(100%, 1180px);
   margin: 0 auto;
@@ -1494,6 +1587,18 @@ select:focus {
   .workspace.nav-collapsed {
     grid-template-columns: 1fr;
     padding-left: 62px;
+  }
+
+  .landing-page {
+    padding: 32px 16px 60px;
+  }
+
+  .landing-hero {
+    padding: 40px 0 52px;
+  }
+
+  .landing-features {
+    grid-template-columns: 1fr;
   }
 
   .my-page,
