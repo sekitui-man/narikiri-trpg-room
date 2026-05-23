@@ -45,3 +45,4 @@
 - Fixed owner/admin RLS gaps for profile lookup and room updates, changed allowlist removal to logical suspension, added site-title top navigation, and began splitting shared app types/topbar code out of `App.tsx`.
 - Marked allowlisted Discord accounts that have not logged in yet with a compact login-state pictogram in the owner user management UI.
 - Widened the in-room left navigation rail and collapsed reopen tab across responsive breakpoints so the tab does not feel cramped on narrower screens.
+- Removed the centered max-width constraint from the in-room workspace so the navigation rail and memo panel align to the viewport edges on wide screens.
