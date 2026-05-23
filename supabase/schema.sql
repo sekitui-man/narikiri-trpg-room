@@ -391,6 +391,13 @@ for select
 to authenticated
 using (app_private.is_allowed_member() and id = (select auth.uid()));
 
+drop policy if exists "Owners can read profiles for admin" on public.profiles;
+create policy "Owners can read profiles for admin"
+on public.profiles
+for select
+to authenticated
+using (app_private.current_access_role() = 'owner');
+
 drop policy if exists "Room members can read shared profiles" on public.profiles;
 create policy "Room members can read shared profiles"
 on public.profiles
@@ -448,19 +455,24 @@ with check (
   and app_private.current_access_role() in ('owner', 'gm')
 );
 
+drop policy if exists "Room owners and GMs can update rooms" on public.rooms;
 create policy "Room owners and GMs can update rooms"
 on public.rooms
 for update
 to authenticated
 using (
-  exists (
+  app_private.current_access_role() = 'owner'
+  or exists (
     select 1 from public.room_members member
     where member.room_id = id
       and member.user_id = (select auth.uid())
       and member.role in ('owner', 'gm')
   )
 )
-with check (app_private.is_room_member(id));
+with check (
+  app_private.current_access_role() = 'owner'
+  or app_private.is_room_member(id)
+);
 
 create policy "Room members can read membership"
 on public.room_members

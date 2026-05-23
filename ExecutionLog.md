@@ -42,3 +42,4 @@
 - Removed the auxiliary/tools map UI, guarded room-scoped API calls to UUID room IDs, and enabled owner-managed Discord allowlisting.
 - Prevented Supabase-configured environments from showing or auto-seeding demo room data when no production rooms exist.
 - Allowed room creators to read their newly created room before membership bootstrap completes.
+- Fixed owner/admin RLS gaps for profile lookup and room updates, changed allowlist removal to logical suspension, added site-title top navigation, and began splitting shared app types/topbar code out of `App.tsx`.

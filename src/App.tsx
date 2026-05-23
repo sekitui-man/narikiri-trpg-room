@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Pencil,
   Lock,
-  LogOut,
   MessageCircle,
   MessageSquareText,
   PanelRight,
@@ -16,12 +15,12 @@ import {
   Save,
   Send,
   Settings,
-  ShieldCheck,
   Trash2,
   UsersRound,
   UserRound,
   X,
 } from 'lucide-react';
+import type { AccessRole, AuthState, ViewMode } from './appTypes';
 import { isSupabaseConfigured, supabase } from './supabase';
 import {
   cocSkillDefinitions,
@@ -49,12 +48,10 @@ import {
   updateRoomApi,
   updateSceneApi,
 } from './roomApi';
+import { AppTopbar } from './components/AppTopbar';
 import { demoCharacters, demoMessages, demoRooms, demoScenes } from './demoData';
 import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSkillMap, Room, RpMessage, Scene } from './types';
 
-type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
-type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
-type ViewMode = 'room' | 'rooms' | 'room-scenes' | 'my-page' | 'admin';
 type RoomSettingsTab = 'basic' | 'permissions';
 type SceneSettingsTab = 'basic' | 'permissions';
 type AllowedMember = {
@@ -609,7 +606,10 @@ export function App() {
         const row = await createMessageApi({
           roomId: selectedRoomId,
           sceneId: isUuid(selectedSceneId) ? selectedSceneId : null,
-          characterId: messageMode === 'ic' && characters.some((c) => c.id === activeCharacter.id) ? activeCharacter.id : null,
+          characterId:
+            messageMode === 'ic' && isUuid(activeCharacter.id) && characters.some((c) => c.id === activeCharacter.id)
+              ? activeCharacter.id
+              : null,
           mode: messageMode,
           body: trimmed,
         });
@@ -1104,15 +1104,23 @@ export function App() {
 
   async function deleteAdminAccount(discordUserId: string) {
     if (!supabase) return;
-    if (!window.confirm('このユーザを許可リストから削除しますか？')) return;
-    const { error } = await supabase.from('allowed_discord_accounts').delete().eq('discord_user_id', discordUserId);
-    if (error) { showToast(error.message, 'error'); return; }
-    setAllowedAccounts((current) => current.filter((a) => a.discordUserId !== discordUserId));
-    if (selectedAdminAccountId === discordUserId) {
-      setSelectedAdminAccountId(null);
-      setAdminDetailDraft(null);
+    if (discordProfile?.id === discordUserId) {
+      showToast('自分自身の管理アカウントは停止できません。', 'error');
+      return;
     }
-    showToast('ユーザを削除しました。');
+    if (!window.confirm('このユーザを停止しますか？')) return;
+    const { error } = await supabase
+      .from('allowed_discord_accounts')
+      .update({ is_active: false })
+      .eq('discord_user_id', discordUserId);
+    if (error) { showToast(error.message, 'error'); return; }
+    setAllowedAccounts((current) =>
+      current.map((a) => a.discordUserId === discordUserId ? { ...a, isActive: false } : a),
+    );
+    if (selectedAdminAccountId === discordUserId) {
+      setAdminDetailDraft((current) => current ? { ...current, isActive: false } : current);
+    }
+    showToast('ユーザを停止しました。');
   }
 
   if (authState === 'checking') {
@@ -1151,52 +1159,24 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <MessageSquareText size={23} />
-          <span>Narikiri TRPG Room</span>
-        </div>
-        <div className="topbar-meta">
-          <span className="access-chip">
-            <ShieldCheck size={14} />
-            {authState === 'demo' ? 'DEMO MODE' : 'INVITED ONLY'}
-          </span>
-          <div className="topbar-tabs" aria-label="表示切り替え">
-            <button
-              className={currentView === 'rooms' || currentView === 'room-scenes' ? 'topbar-tab active' : 'topbar-tab'}
-              type="button"
-              onClick={() => {
-                setIsRoomConfigOpen(false);
-                setCurrentView('rooms');
-              }}
-            >
-              <MessageSquareText size={16} />
-              ルーム
-            </button>
-            <button
-              className={currentView === 'my-page' ? 'topbar-tab active' : 'topbar-tab'}
-              type="button"
-              onClick={() => setCurrentView('my-page')}
-            >
-              <UserRound size={16} />
-              マイページ
-            </button>
-            {currentAccessRole === 'owner' && (
-              <button
-                className={currentView === 'admin' ? 'topbar-tab active' : 'topbar-tab'}
-                type="button"
-                onClick={() => { setCurrentView('admin'); void loadAllowedAccounts(); }}
-              >
-                <ShieldCheck size={16} />
-                管理
-              </button>
-            )}
-          </div>
-          <button className="icon-button" type="button" aria-label="ログアウト" onClick={handleSignOut}>
-            <LogOut size={18} />
-          </button>
-        </div>
-      </header>
+      <AppTopbar
+        authState={authState}
+        currentAccessRole={currentAccessRole}
+        currentView={currentView}
+        onAdmin={() => { setCurrentView('admin'); void loadAllowedAccounts(); }}
+        onHome={() => {
+          setIsRoomConfigOpen(false);
+          setConfiguredSceneId(null);
+          setCurrentView('rooms');
+        }}
+        onMyPage={() => setCurrentView('my-page')}
+        onRooms={() => {
+          setIsRoomConfigOpen(false);
+          setConfiguredSceneId(null);
+          setCurrentView('rooms');
+        }}
+        onSignOut={handleSignOut}
+      />
 
       {currentView === 'rooms' ? (
         <section className="management-page" aria-label="ルームメニュー">
@@ -1919,7 +1899,7 @@ export function App() {
                     </button>
                     <button className="button-danger" type="button" onClick={() => void deleteAdminAccount(account.discordUserId)}>
                       <Trash2 size={16} />
-                      削除
+                      停止
                     </button>
                   </div>
                 </section>

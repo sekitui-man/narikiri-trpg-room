@@ -65,6 +65,22 @@ button:disabled {
   letter-spacing: 0;
 }
 
+.brand-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.brand-button:hover {
+  color: var(--tertiary);
+}
+
+.brand-button:focus-visible {
+  outline: 2px solid var(--tertiary);
+  outline-offset: 6px;
+}
+
 .auth-shell {
   align-items: center;
 }
