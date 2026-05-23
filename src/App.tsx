@@ -54,7 +54,7 @@ import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSk
 
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
-type ViewMode = 'room' | 'rooms' | 'room-scenes' | 'my-page';
+type ViewMode = 'room' | 'rooms' | 'room-scenes' | 'my-page' | 'admin';
 type RoomSettingsTab = 'basic' | 'permissions';
 type SceneSettingsTab = 'basic' | 'permissions';
 type AllowedMember = {
@@ -62,6 +62,12 @@ type AllowedMember = {
   discordUserId?: string | null;
   display_name: string;
   role: AccessRole;
+};
+type AllowedAccount = {
+  discordUserId: string;
+  displayName: string;
+  role: AccessRole;
+  isActive: boolean;
 };
 type RoomMember = {
   roomId: string;
@@ -203,9 +209,11 @@ export function App() {
   const [isRoomNavOpen, setIsRoomNavOpen] = useState(true);
   const [allowedDiscordDraft, setAllowedDiscordDraft] = useState({
     discordUserId: '',
-    displayName: '',
     role: 'player' as AccessRole,
   });
+  const [allowedAccounts, setAllowedAccounts] = useState<AllowedAccount[]>([]);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [editingAccountDraft, setEditingAccountDraft] = useState<{ role: AccessRole; isActive: boolean } | null>(null);
 
   useEffect(() => {
     if (!supabase) return;
@@ -1025,19 +1033,14 @@ export function App() {
     if (!supabase || authState !== 'allowed' || currentAccessRole !== 'owner') return;
 
     const discordUserId = allowedDiscordDraft.discordUserId.trim();
-    const displayName = allowedDiscordDraft.displayName.trim();
     if (!/^[0-9]{17,20}$/.test(discordUserId)) {
       showToast('DiscordユーザIDは17-20桁の数字で入力してください。', 'error');
-      return;
-    }
-    if (!displayName) {
-      showToast('表示名を入力してください。', 'error');
       return;
     }
 
     const { error } = await supabase.from('allowed_discord_accounts').upsert({
       discord_user_id: discordUserId,
-      display_name: displayName,
+      display_name: '(pending)',
       role: allowedDiscordDraft.role,
       is_active: true,
     });
@@ -1047,8 +1050,52 @@ export function App() {
       return;
     }
 
-    setAllowedDiscordDraft({ discordUserId: '', displayName: '', role: 'player' });
+    setAllowedDiscordDraft({ discordUserId: '', role: 'player' });
+    setAllowedAccounts((current) => {
+      const exists = current.some((a) => a.discordUserId === discordUserId);
+      if (exists) return current.map((a) => a.discordUserId === discordUserId ? { ...a, role: allowedDiscordDraft.role, isActive: true } : a);
+      return [...current, { discordUserId, displayName: '(pending)', role: allowedDiscordDraft.role, isActive: true }];
+    });
     showToast('Discordアカウントを許可リストに追加しました。');
+  }
+
+  async function loadAllowedAccounts() {
+    if (!supabase || currentAccessRole !== 'owner') return;
+    const { data, error } = await supabase
+      .from('allowed_discord_accounts')
+      .select('discord_user_id, display_name, role, is_active')
+      .order('created_at', { ascending: true });
+    if (error) { showToast(error.message, 'error'); return; }
+    setAllowedAccounts((data ?? []).map((row) => ({
+      discordUserId: row.discord_user_id,
+      displayName: row.display_name,
+      role: row.role as AccessRole,
+      isActive: row.is_active,
+    })));
+  }
+
+  function startEditAccount(account: AllowedAccount) {
+    setEditingAccountId(account.discordUserId);
+    setEditingAccountDraft({ role: account.role, isActive: account.isActive });
+  }
+
+  function cancelEditAccount() {
+    setEditingAccountId(null);
+    setEditingAccountDraft(null);
+  }
+
+  async function saveEditAccount(discordUserId: string) {
+    if (!supabase || !editingAccountDraft) return;
+    const { error } = await supabase
+      .from('allowed_discord_accounts')
+      .update({ role: editingAccountDraft.role, is_active: editingAccountDraft.isActive })
+      .eq('discord_user_id', discordUserId);
+    if (error) { showToast(error.message, 'error'); return; }
+    setAllowedAccounts((current) =>
+      current.map((a) => a.discordUserId === discordUserId ? { ...a, ...editingAccountDraft } : a),
+    );
+    cancelEditAccount();
+    showToast('ユーザ設定を保存しました。');
   }
 
   if (authState === 'checking') {
@@ -1117,6 +1164,16 @@ export function App() {
               <UserRound size={16} />
               マイページ
             </button>
+            {currentAccessRole === 'owner' && (
+              <button
+                className={currentView === 'admin' ? 'topbar-tab active' : 'topbar-tab'}
+                type="button"
+                onClick={() => { setCurrentView('admin'); void loadAllowedAccounts(); }}
+              >
+                <ShieldCheck size={16} />
+                管理
+              </button>
+            )}
           </div>
           <button className="icon-button" type="button" aria-label="ログアウト" onClick={handleSignOut}>
             <LogOut size={18} />
@@ -1716,6 +1773,112 @@ export function App() {
             </div>
           )}
         </section>
+      ) : currentView === 'admin' ? (
+        <section className="management-page" aria-label="管理者ページ">
+          <div className="my-page-header">
+            <div>
+              <p>Admin</p>
+              <h1>ユーザ管理</h1>
+            </div>
+          </div>
+          <div className="admin-layout">
+            <section className="tool-panel" aria-label="ユーザ追加">
+              <div className="section-title">
+                <Plus size={16} />
+                ユーザを追加
+              </div>
+              <form className="admin-add-form" onSubmit={handleAllowDiscordAccount}>
+                <label>
+                  DiscordユーザID
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]{17,20}"
+                    value={allowedDiscordDraft.discordUserId}
+                    onChange={(event) => setAllowedDiscordDraft({ ...allowedDiscordDraft, discordUserId: event.target.value })}
+                    placeholder="600301816315379723"
+                  />
+                </label>
+                <label>
+                  権限
+                  <select
+                    value={allowedDiscordDraft.role}
+                    onChange={(event) => setAllowedDiscordDraft({ ...allowedDiscordDraft, role: event.target.value as AccessRole })}
+                  >
+                    <option value="player">player</option>
+                    <option value="gm">gm</option>
+                    <option value="viewer">viewer</option>
+                    <option value="owner">owner</option>
+                  </select>
+                </label>
+                <button className="button-primary" type="submit">
+                  <Plus size={16} />
+                  追加
+                </button>
+              </form>
+            </section>
+            <section className="tool-panel" aria-label="ユーザ一覧">
+              <div className="section-title">
+                <UsersRound size={16} />
+                ユーザ一覧
+              </div>
+              {allowedAccounts.length === 0 ? (
+                <p className="empty-state">ユーザがいません。</p>
+              ) : (
+                <div className="admin-user-list">
+                  {allowedAccounts.map((account) => {
+                    const isEditing = editingAccountId === account.discordUserId;
+                    return (
+                      <article key={account.discordUserId} className={`admin-user-card${!account.isActive ? ' inactive' : ''}`}>
+                        <div className="admin-user-info">
+                          <strong>{account.displayName}</strong>
+                          <small>ID: {account.discordUserId}</small>
+                        </div>
+                        {isEditing && editingAccountDraft ? (
+                          <div className="admin-user-edit">
+                            <select
+                              value={editingAccountDraft.role}
+                              onChange={(e) => setEditingAccountDraft({ ...editingAccountDraft, role: e.target.value as AccessRole })}
+                            >
+                              <option value="player">player</option>
+                              <option value="gm">gm</option>
+                              <option value="viewer">viewer</option>
+                              <option value="owner">owner</option>
+                            </select>
+                            <label className="admin-toggle">
+                              <input
+                                type="checkbox"
+                                checked={editingAccountDraft.isActive}
+                                onChange={(e) => setEditingAccountDraft({ ...editingAccountDraft, isActive: e.target.checked })}
+                              />
+                              有効
+                            </label>
+                            <div className="inline-actions">
+                              <button className="button-primary" type="button" onClick={() => void saveEditAccount(account.discordUserId)}>
+                                <Check size={14} />
+                                保存
+                              </button>
+                              <button className="button-secondary" type="button" onClick={cancelEditAccount}>
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="admin-user-meta">
+                            <span className="access-chip">{account.role}</span>
+                            {!account.isActive && <span className="access-chip muted-chip">無効</span>}
+                            <button className="mini-icon-button" type="button" onClick={() => startEditAccount(account)} aria-label="編集">
+                              <Pencil size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+        </section>
       ) : currentView === 'my-page' ? (
         <section className="my-page" aria-label="マイページ">
           <div className="my-page-header">
@@ -1748,54 +1911,6 @@ export function App() {
                     {discordProfile.id && <small>ID: {discordProfile.id}</small>}
                   </div>
                 </section>
-              )}
-              {currentAccessRole === 'owner' && (
-                <form className="owner-invite-card" aria-label="Discord許可リスト" onSubmit={handleAllowDiscordAccount}>
-                  <div className="section-title">
-                    <ShieldCheck size={16} />
-                    Discord許可
-                  </div>
-                  <label>
-                    DiscordユーザID
-                    <input
-                      inputMode="numeric"
-                      pattern="[0-9]{17,20}"
-                      value={allowedDiscordDraft.discordUserId}
-                      onChange={(event) =>
-                        setAllowedDiscordDraft({ ...allowedDiscordDraft, discordUserId: event.target.value })
-                      }
-                      placeholder="600301816315379723"
-                    />
-                  </label>
-                  <label>
-                    表示名
-                    <input
-                      value={allowedDiscordDraft.displayName}
-                      onChange={(event) =>
-                        setAllowedDiscordDraft({ ...allowedDiscordDraft, displayName: event.target.value })
-                      }
-                      placeholder="Hinata"
-                    />
-                  </label>
-                  <label>
-                    権限
-                    <select
-                      value={allowedDiscordDraft.role}
-                      onChange={(event) =>
-                        setAllowedDiscordDraft({ ...allowedDiscordDraft, role: event.target.value as AccessRole })
-                      }
-                    >
-                      <option value="player">player</option>
-                      <option value="gm">gm</option>
-                      <option value="viewer">viewer</option>
-                      <option value="owner">owner</option>
-                    </select>
-                  </label>
-                  <button className="button-primary" type="submit">
-                    <Plus size={16} />
-                    許可リストに追加
-                  </button>
-                </form>
               )}
               <div className="section-title">
                 <UsersRound size={16} />
