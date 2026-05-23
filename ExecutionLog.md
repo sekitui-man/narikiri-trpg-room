@@ -50,3 +50,4 @@
 - Added a My Page investigator menu, split investigator list and new-investigator screens, and verified `npm run build` plus local Vite HTTP 200.
 - Split investigator sheet editing out of `App.tsx` into `components/CharacterEditor.tsx` and moved character normalization/default/derived-value logic into `characterModel.ts`; verified `npm run build`.
 - Changed existing investigator sheets to open in read-only mode with an explicit edit/cancel flow while keeping new investigator sheets editable by default; verified `npm run build` and local Browser interaction.
+- Reworked My Page into large menu cards for character management and profile editing, added profile display-name editing backed by `profiles.display_name`, and verified build plus Browser navigation.

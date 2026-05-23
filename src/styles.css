@@ -790,9 +790,11 @@ select:focus {
 }
 
 .my-page-menu {
+  min-height: min(58vh, 560px);
   display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(280px, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 24px;
+  align-content: center;
   align-items: stretch;
 }
 
@@ -801,17 +803,16 @@ select:focus {
 }
 
 .menu-card-button {
-  min-height: 96px;
+  min-height: 190px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
+  gap: 18px;
+  place-items: center;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
+  padding: 34px 28px;
   background: var(--surface);
   color: var(--primary);
-  text-align: left;
+  text-align: center;
 }
 
 .menu-card-button:hover,
@@ -821,8 +822,8 @@ select:focus {
 }
 
 .menu-card-icon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
@@ -833,20 +834,35 @@ select:focus {
 .menu-card-button span:last-child {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 8px;
 }
 
 .menu-card-button strong {
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 600;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
 }
 
 .menu-card-button small {
   color: var(--secondary);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 16px;
+  line-height: 24px;
   letter-spacing: 0.02em;
+}
+
+.profile-edit-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+.profile-preview-card {
+  margin-bottom: 0;
+}
+
+.profile-edit-form {
+  gap: 18px;
 }
 
 .owner-invite-card {
@@ -1477,6 +1493,11 @@ select:focus {
   }
 
   .my-page-menu {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .profile-edit-layout {
     grid-template-columns: 1fr;
   }
 

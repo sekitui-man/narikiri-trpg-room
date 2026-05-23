@@ -159,6 +159,7 @@ export function App() {
   const [allowedAccounts, setAllowedAccounts] = useState<AllowedAccount[]>([]);
   const [selectedAdminAccountId, setSelectedAdminAccountId] = useState<string | null>(null);
   const [adminDetailDraft, setAdminDetailDraft] = useState<{ role: AccessRole; isActive: boolean } | null>(null);
+  const [profileDraft, setProfileDraft] = useState({ displayName: '' });
 
   useEffect(() => {
     if (!supabase) return;
@@ -279,6 +280,10 @@ export function App() {
   }, [activeRoom?.id, activeRoomIdIsUuid, authState]);
 
   useEffect(() => {
+    setProfileDraft({ displayName: discordProfile?.displayName ?? '' });
+  }, [discordProfile?.displayName]);
+
+  useEffect(() => {
     if (!supabase || authState !== 'allowed' || !activeRoomIdIsUuid) return;
 
     const realtimeClient = supabase;
@@ -340,8 +345,19 @@ export function App() {
     const dp = getDiscordProfile(user);
     const discordDisplayName = dp?.displayName ?? null;
     const discordAvatarUrl = dp?.avatarUrl ?? null;
-    if (allowedMember) await ensureMemberBootstrap(user.id, profileKey, allowedMember, discordDisplayName, discordAvatarUrl);
-    if (allowedMember) await loadRoomData(user.id, profileKey, allowedMember, discordDisplayName, discordAvatarUrl);
+    if (allowedMember) {
+      const profileDisplayName = await ensureMemberBootstrap(
+        user.id,
+        profileKey,
+        allowedMember,
+        discordDisplayName,
+        discordAvatarUrl,
+      );
+      if (profileDisplayName) {
+        setDiscordProfile((current) => (current ? { ...current, displayName: profileDisplayName } : current));
+      }
+      await loadRoomData(user.id, profileKey, allowedMember, discordDisplayName, discordAvatarUrl);
+    }
     setAuthState(allowedMember ? 'allowed' : 'blocked');
   }
 
@@ -369,27 +385,29 @@ export function App() {
   }
 
   async function ensureMemberBootstrap(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null, discordAvatarUrl: string | null) {
-    if (!supabase) return;
+    if (!supabase) return null;
+
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', userId)
+      .maybeSingle();
+    const displayName = existingProfile?.display_name ?? discordDisplayName ?? allowedMember.display_name;
 
     await supabase.from('profiles').upsert({
       id: userId,
       email: profileKey,
-      display_name: discordDisplayName ?? allowedMember.display_name,
+      discord_user_id: allowedMember.discordUserId ?? null,
+      display_name: displayName,
       avatar_url: discordAvatarUrl,
       updated_at: new Date().toISOString(),
     });
+
+    return displayName;
   }
 
-  async function loadRoomData(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null, discordAvatarUrl: string | null) {
+  async function loadRoomData(userId: string, _profileKey: string, _allowedMember: AllowedMember, _discordDisplayName: string | null, _discordAvatarUrl: string | null) {
     if (!supabase) return;
-
-    await supabase.from('profiles').upsert({
-      id: userId,
-      email: profileKey,
-      display_name: discordDisplayName ?? allowedMember.display_name,
-      avatar_url: discordAvatarUrl,
-      updated_at: new Date().toISOString(),
-    });
 
     const { data: rooms, error: roomsError } = await supabase
       .from('rooms')
@@ -712,6 +730,30 @@ export function App() {
       setSelectedCharacterId(nextCharacters[0]?.id ?? demoCharacters[0].id);
       return nextCharacters.length ? nextCharacters : [createDefaultCharacter(currentUserId)];
     });
+  }
+
+  async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const displayName = profileDraft.displayName.trim();
+    if (!displayName) {
+      showToast('表示名を入力してください。', 'error');
+      return;
+    }
+
+    if (supabase && authState === 'allowed' && currentUserId) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ display_name: displayName, updated_at: new Date().toISOString() })
+        .eq('id', currentUserId);
+      if (error) {
+        showToast(error.message, 'error');
+        return;
+      }
+    }
+
+    setDiscordProfile((current) => (current ? { ...current, displayName } : current));
+    setCurrentView('my-page');
+    showToast('プロフィールを保存しました。');
   }
 
   async function handleCreateRoom() {
@@ -1887,8 +1929,42 @@ export function App() {
           </div>
 
           <div className="my-page-menu">
+            <button className="menu-card-button" type="button" onClick={() => setCurrentView('characters')}>
+              <span className="menu-card-icon">
+                <UsersRound size={20} />
+              </span>
+              <span>
+                <strong>キャラクター</strong>
+                <small>{characters.length}件の探索者を管理</small>
+              </span>
+            </button>
+            <button className="menu-card-button" type="button" onClick={() => setCurrentView('profile-edit')}>
+              <span className="menu-card-icon">
+                <UserRound size={20} />
+              </span>
+              <span>
+                <strong>プロフィール編集</strong>
+                <small>{discordProfile?.displayName ?? '表示名を設定'}</small>
+              </span>
+            </button>
+          </div>
+        </section>
+      ) : currentView === 'profile-edit' ? (
+        <section className="my-page" aria-label="プロフィール編集">
+          <div className="my-page-header">
+            <div>
+              <p>Profile</p>
+              <h1>プロフィール編集</h1>
+            </div>
+            <button className="button-secondary" type="button" onClick={() => setCurrentView('my-page')}>
+              <UserRound size={16} />
+              マイページ
+            </button>
+          </div>
+
+          <div className="profile-edit-layout">
             {discordProfile && (
-              <section className="discord-profile-card" aria-label="Discordプロフィール">
+              <section className="discord-profile-card profile-preview-card" aria-label="Discordプロフィール">
                 {discordProfile.avatarUrl ? (
                   <img src={discordProfile.avatarUrl} alt="" />
                 ) : (
@@ -1905,15 +1981,27 @@ export function App() {
                 </div>
               </section>
             )}
-            <button className="menu-card-button" type="button" onClick={() => setCurrentView('characters')}>
-              <span className="menu-card-icon">
-                <UsersRound size={20} />
-              </span>
-              <span>
-                <strong>探索者</strong>
-                <small>{characters.length}件の探索者を管理</small>
-              </span>
-            </button>
+            <form className="tool-panel profile-edit-form" onSubmit={handleSaveProfile}>
+              <div className="section-title">
+                <Pencil size={16} />
+                表示名
+              </div>
+              <label>
+                アプリ内表示名
+                <input
+                  maxLength={80}
+                  value={profileDraft.displayName}
+                  onChange={(event) => setProfileDraft({ displayName: event.target.value })}
+                  placeholder="表示名"
+                />
+              </label>
+              <div className="editor-actions compact">
+                <button className="button-primary" type="submit">
+                  <Save size={16} />
+                  保存
+                </button>
+              </div>
+            </form>
           </div>
         </section>
       ) : currentView === 'characters' ? (

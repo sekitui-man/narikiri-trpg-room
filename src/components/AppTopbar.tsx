@@ -44,7 +44,10 @@ export function AppTopbar({
           </button>
           <button
             className={
-              currentView === 'my-page' || currentView === 'characters' || currentView === 'character-new'
+              currentView === 'my-page' ||
+              currentView === 'characters' ||
+              currentView === 'character-new' ||
+              currentView === 'profile-edit'
                 ? 'topbar-tab active'
                 : 'topbar-tab'
             }
