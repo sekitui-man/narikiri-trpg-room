@@ -281,6 +281,7 @@ select:focus {
 
 .workspace.nav-collapsed {
   grid-template-columns: minmax(0, 1fr) 320px;
+  padding-left: 52px;
 }
 
 .my-page {
@@ -889,6 +890,15 @@ select:focus {
   background: var(--surface);
 }
 
+.scene-item[role="button"] {
+  cursor: pointer;
+}
+
+.scene-item[role="button"]:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
 .scene-item.selected,
 .character-item.selected {
   border-left-color: var(--tertiary);
@@ -1354,6 +1364,7 @@ select:focus {
 
   .workspace.nav-collapsed {
     grid-template-columns: 1fr;
+    padding-left: 52px;
   }
 
   .right-panel {
@@ -1420,6 +1431,7 @@ select:focus {
 
   .workspace.nav-collapsed {
     grid-template-columns: 1fr;
+    padding-left: 44px;
   }
 
   .my-page,

@@ -124,6 +124,22 @@ create table if not exists public.rp_messages (
   created_at timestamptz not null default now()
 );
 
+alter table public.rp_messages replica identity full;
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'rp_messages'
+    ) then
+    alter publication supabase_realtime add table public.rp_messages;
+  end if;
+end $$;
+
 create or replace function app_private.current_discord_user_id()
 returns text
 language sql

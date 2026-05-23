@@ -324,6 +324,38 @@ export function App() {
     void loadActiveRoomContent(activeRoom.id);
   }, [activeRoom?.id, authState]);
 
+  useEffect(() => {
+    if (!supabase || authState !== 'allowed' || !activeRoom?.id) return;
+
+    const realtimeClient = supabase;
+    let refreshTimer: number | undefined;
+    const refreshMessages = () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void loadActiveRoomContent(activeRoom.id);
+      }, 150);
+    };
+
+    const channel = realtimeClient
+      .channel(`room-messages:${activeRoom.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rp_messages',
+          filter: `room_id=eq.${activeRoom.id}`,
+        },
+        refreshMessages,
+      )
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      void realtimeClient.removeChannel(channel);
+    };
+  }, [activeRoom?.id, authState]);
+
   async function handleAuthenticatedUser(user: User | null) {
     if (!user) {
       setAuthState('signed-out');
@@ -1447,22 +1479,27 @@ export function App() {
                     <div
                       className={scene.id === selectedSceneId ? 'scene-item selected' : 'scene-item'}
                       key={scene.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openScene(scene)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openScene(scene);
+                        }
+                      }}
                     >
                       <span>{scene.title}</span>
                       <small>{scene.locationName || '場所未設定'} / {scene.timeLabel || '時間未設定'}</small>
                       <div className="inline-actions">
-                        <button
-                          className="button-secondary"
-                          type="button"
-                          onClick={() => openScene(scene)}
-                        >
-                          入室
-                        </button>
                         {canEditScene(scene) && (
                           <button
                             className="mini-icon-button"
                             type="button"
-                            onClick={() => openSceneSettings(activeRoom, scene)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openSceneSettings(activeRoom, scene);
+                            }}
                             aria-label="シーン設定"
                           >
                             <Settings size={15} />
@@ -1472,7 +1509,10 @@ export function App() {
                           <button
                             className="mini-icon-button"
                             type="button"
-                            onClick={() => void handleDeleteScene(scene)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleDeleteScene(scene);
+                            }}
                             aria-label="シーン削除"
                           >
                             <Trash2 size={14} />
