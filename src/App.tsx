@@ -170,6 +170,7 @@ export function App() {
   const [authState, setAuthState] = useState<AuthState>(isSupabaseConfigured ? 'checking' : 'demo');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; id: number } | null>(null);
   const [currentAccessRole, setCurrentAccessRole] = useState<AccessRole | null>(null);
   const [discordProfile, setDiscordProfile] = useState<DiscordProfile | null>(null);
   const [rooms, setRooms] = useState<Room[]>(() => (isSupabaseConfigured ? [] : demoRooms));
@@ -355,6 +356,12 @@ export function App() {
     };
   }, [activeRoom?.id, activeRoomIdIsUuid, authState]);
 
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    const id = Date.now();
+    setToast({ message, type, id });
+    window.setTimeout(() => setToast((current) => (current?.id === id ? null : current)), 3000);
+  }
+
   async function handleAuthenticatedUser(user: User | null) {
     if (!user) {
       setAuthState('signed-out');
@@ -376,8 +383,9 @@ export function App() {
     setCurrentUserId(user.id);
     const allowedMember = await checkAllowed(discordUserId);
     setCurrentAccessRole(allowedMember?.role ?? null);
-    if (allowedMember) await ensureMemberBootstrap(user.id, profileKey, allowedMember);
-    if (allowedMember) await loadRoomData(user.id, profileKey, allowedMember);
+    const discordDisplayName = getDiscordProfile(user)?.displayName ?? null;
+    if (allowedMember) await ensureMemberBootstrap(user.id, profileKey, allowedMember, discordDisplayName);
+    if (allowedMember) await loadRoomData(user.id, profileKey, allowedMember, discordDisplayName);
     setAuthState(allowedMember ? 'allowed' : 'blocked');
   }
 
@@ -404,24 +412,24 @@ export function App() {
     } as AllowedMember;
   }
 
-  async function ensureMemberBootstrap(userId: string, profileKey: string, allowedMember: AllowedMember) {
+  async function ensureMemberBootstrap(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null) {
     if (!supabase) return;
 
     await supabase.from('profiles').upsert({
       id: userId,
       email: profileKey,
-      display_name: allowedMember.display_name,
+      display_name: discordDisplayName ?? allowedMember.display_name,
       updated_at: new Date().toISOString(),
     });
   }
 
-  async function loadRoomData(userId: string, profileKey: string, allowedMember: AllowedMember) {
+  async function loadRoomData(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null) {
     if (!supabase) return;
 
     await supabase.from('profiles').upsert({
       id: userId,
       email: profileKey,
-      display_name: allowedMember.display_name,
+      display_name: discordDisplayName ?? allowedMember.display_name,
       updated_at: new Date().toISOString(),
     });
 
@@ -588,7 +596,7 @@ export function App() {
         const row = await createMessageApi({
           roomId: selectedRoomId,
           sceneId: isUuid(selectedSceneId) ? selectedSceneId : null,
-          characterId: messageMode === 'ic' && isUuid(activeCharacter.id) ? activeCharacter.id : null,
+          characterId: messageMode === 'ic' && characters.some((c) => c.id === activeCharacter.id) ? activeCharacter.id : null,
           mode: messageMode,
           body: trimmed,
         });
@@ -596,7 +604,7 @@ export function App() {
         setDraft('');
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : '発言を送信できませんでした。');
+        showToast(error instanceof Error ? error.message : '発言を送信できませんでした。', 'error');
         return;
       }
     }
@@ -640,7 +648,7 @@ export function App() {
         cancelEditMessage();
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : '発言を保存できませんでした。');
+        showToast(error instanceof Error ? error.message : '発言を保存できませんでした。', 'error');
         return;
       }
     }
@@ -660,7 +668,7 @@ export function App() {
       try {
         await deleteMessageApi(message.id);
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : '発言を削除できませんでした。');
+        showToast(error instanceof Error ? error.message : '発言を削除できませんでした。', 'error');
         return;
       }
     }
@@ -683,10 +691,10 @@ export function App() {
         const created = rowToCharacter(data);
         setCharacters((current) => [...current, created]);
         setSelectedCharacterId(created.id);
-        setAuthMessage('探索者を作成しました。');
+        showToast('探索者を作成しました。');
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : '探索者を作成できませんでした。');
+        showToast(error instanceof Error ? error.message : '探索者を作成できませんでした。', 'error');
         return;
       }
     }
@@ -705,10 +713,10 @@ export function App() {
         const saved = rowToCharacter(data);
         setCharacters((current) => current.map((character) => (character.id === saved.id ? saved : character)));
         setCharacterDraft(saved);
-        setAuthMessage('探索者を保存しました。');
+        showToast('探索者を保存しました。');
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : '探索者を保存できませんでした。');
+        showToast(error instanceof Error ? error.message : '探索者を保存できませんでした。', 'error');
         return;
       }
     }
@@ -726,7 +734,7 @@ export function App() {
       try {
         await archiveCharacterApi(selectedRoomId, activeCharacter.id);
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : '探索者をアーカイブできませんでした。');
+        showToast(error instanceof Error ? error.message : '探索者をアーカイブできませんでした。', 'error');
         return;
       }
     }
@@ -755,10 +763,10 @@ export function App() {
         setRoomDraft(created);
         setIsRoomConfigOpen(true);
         setRoomSettingsTab('basic');
-        setAuthMessage('ルームを作成しました。');
+        showToast('ルームを作成しました。');
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : 'ルームを作成できませんでした。');
+        showToast(error instanceof Error ? error.message : 'ルームを作成できませんでした。', 'error');
         return;
       }
     }
@@ -784,10 +792,10 @@ export function App() {
         const saved = rowToRoom(await updateRoomApi(nextRoom));
         setRooms((current) => current.map((room) => (room.id === saved.id ? saved : room)));
         setRoomDraft(saved);
-        setAuthMessage('ルームを保存しました。');
+        showToast('ルームを保存しました。');
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : 'ルームを保存できませんでした。');
+        showToast(error instanceof Error ? error.message : 'ルームを保存できませんでした。', 'error');
         return;
       }
     }
@@ -844,7 +852,7 @@ export function App() {
 
   async function handleCreateScene() {
     if (!canCreateActiveRoomScene) {
-      setAuthMessage('このルームでシーンを作成する権限がありません。');
+      showToast('このルームでシーンを作成する権限がありません。', 'error');
       return;
     }
 
@@ -863,7 +871,7 @@ export function App() {
         setCurrentView('room-scenes');
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : 'シーンを作成できませんでした。');
+        showToast(error instanceof Error ? error.message : 'シーンを作成できませんでした。', 'error');
         return;
       }
     }
@@ -887,10 +895,10 @@ export function App() {
         const saved = rowToScene(await updateSceneApi(nextScene));
         setScenes((current) => current.map((scene) => (scene.id === saved.id ? saved : scene)));
         setSceneDraft(saved);
-        setAuthMessage('シーンを保存しました。');
+        showToast('シーンを保存しました。');
         return;
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : 'シーンを保存できませんでした。');
+        showToast(error instanceof Error ? error.message : 'シーンを保存できませんでした。', 'error');
         return;
       }
     }
@@ -907,7 +915,7 @@ export function App() {
       try {
         await deleteRoomApi(room.id);
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : 'ルームを削除できませんでした。');
+        showToast(error instanceof Error ? error.message : 'ルームを削除できませんでした。', 'error');
         return;
       }
     }
@@ -935,7 +943,7 @@ export function App() {
       try {
         await deleteSceneApi(scene.id);
       } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : 'シーンを削除できませんでした。');
+        showToast(error instanceof Error ? error.message : 'シーンを削除できませんでした。', 'error');
         return;
       }
     }
@@ -972,7 +980,7 @@ export function App() {
         can_delete_scenes: nextPermission.canDeleteScenes,
       });
       if (error) {
-        setAuthMessage(error.message);
+        showToast(error.message, 'error');
         return;
       }
     }
@@ -983,7 +991,7 @@ export function App() {
       ),
       nextPermission,
     ]);
-    setAuthMessage('シーン権限を保存しました。');
+    showToast('シーン権限を保存しました。');
   }
 
   async function handleGrantSceneEditor() {
@@ -997,7 +1005,7 @@ export function App() {
         granted_by: currentUserId,
       });
       if (error) {
-        setAuthMessage(error.message);
+        showToast(error.message, 'error');
         return;
       }
     }
@@ -1009,7 +1017,7 @@ export function App() {
         ? current
         : [...current, nextPermission],
     );
-    setAuthMessage('シーン編集者を追加しました。');
+    showToast('シーン編集者を追加しました。');
   }
 
   async function handleAllowDiscordAccount(event: FormEvent<HTMLFormElement>) {
@@ -1019,11 +1027,11 @@ export function App() {
     const discordUserId = allowedDiscordDraft.discordUserId.trim();
     const displayName = allowedDiscordDraft.displayName.trim();
     if (!/^[0-9]{17,20}$/.test(discordUserId)) {
-      setAuthMessage('DiscordユーザIDは17-20桁の数字で入力してください。');
+      showToast('DiscordユーザIDは17-20桁の数字で入力してください。', 'error');
       return;
     }
     if (!displayName) {
-      setAuthMessage('表示名を入力してください。');
+      showToast('表示名を入力してください。', 'error');
       return;
     }
 
@@ -1035,12 +1043,12 @@ export function App() {
     });
 
     if (error) {
-      setAuthMessage(error.message);
+      showToast(error.message, 'error');
       return;
     }
 
     setAllowedDiscordDraft({ discordUserId: '', displayName: '', role: 'player' });
-    setAuthMessage('Discordアカウントを許可リストに追加しました。');
+    showToast('Discordアカウントを許可リストに追加しました。');
   }
 
   if (authState === 'checking') {
@@ -2006,6 +2014,11 @@ export function App() {
           </section>
         </aside>
       </div>
+      )}
+      {toast && (
+        <div className={`toast toast-${toast.type}`} role="status" aria-live="polite">
+          {toast.message}
+        </div>
       )}
     </main>
   );
