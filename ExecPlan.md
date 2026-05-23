@@ -33,7 +33,7 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Pages Functions must strictly validate character payload fields, types, string lengths, and numeric ranges. Client-supplied `room_id`, `owner_id`, `is_archived`, and timestamps are not trusted.
 - Character creation and editing belong in My Page, with a character list followed by a sheet editor. The room view only selects existing characters for posting and keeps the right panel for scene memo content.
 - CoC 6th edition skills are edited from a fixed skill list with base, occupation, interest, growth, other, and total columns. Free-form skill text areas are not used.
-- Alpha world-support tools are client-side only: uploaded room map images remain local to the browser session, while scenes store location coordinates and render as pins on the room map.
+- Alpha does not expose the world-support tab or room map UI. Scene map coordinates may remain in the database for compatibility, but the current UI treats scenes as location/time records only.
 - A room is a collection of scenes. The top room menu opens a room list only; each room opens into a room-content scene list, and room settings open from that room's gear button as a modal dialog with tabs.
 - Room cards expose an accordion with a down-arrow control for quickly viewing that room's scenes without replacing the room list. The room card's primary button is labeled `入室` and opens the full room-content scene list.
 - A scene belongs to one room, has one location plus a time label, and supports tags. Scene listing and creation are handled inside the selected room-content screen; choosing a scene opens the RP scene conversation. Scene settings open as a modal dialog with tabs.
@@ -47,6 +47,8 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - The collapsed navigation tab reserves left gutter space so it does not cover scene titles.
 - In the room-content scene list, a scene row itself opens the scene conversation; separate `入室` buttons are not used there.
 - My Page shows the signed-in Discord profile from Supabase Auth identity data.
+- My Page exposes a Discord allowlist form only to `owner` users. Owner-created entries are still enforced by `allowed_discord_accounts` RLS.
+- Frontend code must not call backend room-scoped APIs unless the selected room id is a UUID; demo room ids are local-only.
 - RP message editing and deletion are author-only operations. The UI only exposes controls for the current user's messages, and RLS restricts update/delete to rows where `author_id = auth.uid()`.
 - RP messages are stored in Supabase and subscribed through Supabase Realtime by room. Insert/update/delete changes trigger a room message refresh so other clients see conversation changes without manual reload.
 - The posting UI does not expose IC/OOC terminology. Users choose either a character name for character speech/action or `中の人` for player-side discussion; the database still stores this as `ic` or `ooc` internally.

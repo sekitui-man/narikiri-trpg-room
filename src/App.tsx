@@ -1,5 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, MouseEvent } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
@@ -7,12 +6,9 @@ import {
   BookOpen,
   Check,
   ChevronDown,
-  ClipboardCopy,
   Pencil,
   Lock,
   LogOut,
-  Map,
-  MapPin,
   MessageCircle,
   MessageSquareText,
   PanelRight,
@@ -22,7 +18,6 @@ import {
   Settings,
   ShieldCheck,
   Trash2,
-  Upload,
   UsersRound,
   UserRound,
   X,
@@ -58,14 +53,9 @@ import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSk
 
 type AuthState = 'checking' | 'signed-out' | 'allowed' | 'blocked' | 'demo';
 type AccessRole = 'owner' | 'gm' | 'player' | 'viewer';
-type ViewMode = 'room' | 'rooms' | 'room-scenes' | 'my-page' | 'tools';
-type LogFormat = 'chat' | 'script' | 'markdown';
+type ViewMode = 'room' | 'rooms' | 'room-scenes' | 'my-page';
 type RoomSettingsTab = 'basic' | 'permissions';
 type SceneSettingsTab = 'basic' | 'permissions';
-type SceneMapRecord = {
-  sceneId: string;
-  imageUrl: string;
-};
 type AllowedMember = {
   email?: string | null;
   discordUserId?: string | null;
@@ -106,6 +96,7 @@ type SceneDraft = Pick<Scene, 'id' | 'title' | 'summary' | 'status' | 'locationN
 type DerivedCoCValues = ReturnType<typeof deriveCoCValues>;
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 const characteristicKeys: Array<keyof CoCCharacteristics> = ['str', 'con', 'siz', 'int', 'pow', 'dex', 'app', 'edu'];
 const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
   { key: 'description', label: '外見・描写' },
@@ -182,12 +173,12 @@ export function App() {
   const [configuredSceneId, setConfiguredSceneId] = useState<string | null>(null);
   const [roomSettingsTab, setRoomSettingsTab] = useState<RoomSettingsTab>('basic');
   const [sceneSettingsTab, setSceneSettingsTab] = useState<SceneSettingsTab>('basic');
-  const [sceneMaps, setSceneMaps] = useState<SceneMapRecord[]>([]);
-  const sceneMapsRef = useRef<SceneMapRecord[]>([]);
-  const [mapPinLabel, setMapPinLabel] = useState('');
-  const [selectedMapPinId, setSelectedMapPinId] = useState<string | null>(null);
   const [isRoomNavOpen, setIsRoomNavOpen] = useState(true);
-  const [logFormat, setLogFormat] = useState<LogFormat>('chat');
+  const [allowedDiscordDraft, setAllowedDiscordDraft] = useState({
+    discordUserId: '',
+    displayName: '',
+    role: 'player' as AccessRole,
+  });
 
   useEffect(() => {
     if (!supabase) return;
@@ -212,10 +203,9 @@ export function App() {
   const activeRoomScenePermission = roomScenePermissions.find(
     (permission) => permission.roomId === activeRoom.id && permission.userId === activeActorId,
   );
-  const activeSceneMap = sceneMaps.find((sceneMap) => sceneMap.sceneId === activeRoom.id) ?? null;
-  const scenePins = roomScenes.filter((scene) => scene.mapX !== null && scene.mapY !== null);
   const activeDerived = deriveCoCValues(characterDraft);
-  const selectedMapPin = scenePins.find((scene) => scene.id === selectedMapPinId) ?? activeScene;
+  const activeRoomIdIsUuid = isUuid(activeRoom?.id);
+  const selectedRoomIdIsUuid = isUuid(selectedRoomId);
   const canManageActiveCharacter =
     authState === 'demo' ||
     characterDraft.ownerId === currentUserId ||
@@ -250,10 +240,6 @@ export function App() {
         character: characters.find((character) => character.id === message.characterId),
       })),
     [characters, messages],
-  );
-  const formattedLog = useMemo(
-    () => formatLog(groupedMessages, logFormat),
-    [groupedMessages, logFormat],
   );
 
   useEffect(() => {
@@ -305,28 +291,12 @@ export function App() {
   }, [activeRoom?.id, scenes, selectedSceneId]);
 
   useEffect(() => {
-    sceneMapsRef.current = sceneMaps;
-  }, [sceneMaps]);
-
-  useEffect(() => {
-    return () => {
-      sceneMapsRef.current.forEach((sceneMap) => {
-        if (sceneMap.imageUrl.startsWith('blob:')) URL.revokeObjectURL(sceneMap.imageUrl);
-      });
-    };
-  }, []);
-
-  useEffect(() => {
-    setSelectedMapPinId(null);
-  }, [selectedSceneId]);
-
-  useEffect(() => {
-    if (!supabase || authState !== 'allowed' || !activeRoom?.id) return;
+    if (!supabase || authState !== 'allowed' || !activeRoomIdIsUuid) return;
     void loadActiveRoomContent(activeRoom.id);
-  }, [activeRoom?.id, authState]);
+  }, [activeRoom?.id, activeRoomIdIsUuid, authState]);
 
   useEffect(() => {
-    if (!supabase || authState !== 'allowed' || !activeRoom?.id) return;
+    if (!supabase || authState !== 'allowed' || !activeRoomIdIsUuid) return;
 
     const realtimeClient = supabase;
     let refreshTimer: number | undefined;
@@ -355,7 +325,7 @@ export function App() {
       if (refreshTimer) window.clearTimeout(refreshTimer);
       void realtimeClient.removeChannel(channel);
     };
-  }, [activeRoom?.id, authState]);
+  }, [activeRoom?.id, activeRoomIdIsUuid, authState]);
 
   async function handleAuthenticatedUser(user: User | null) {
     if (!user) {
@@ -662,12 +632,12 @@ export function App() {
     const trimmed = draft.trim();
     if (!trimmed) return;
 
-    if (supabase && authState === 'allowed' && selectedRoomId) {
+    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid) {
       try {
         const row = await createMessageApi({
           roomId: selectedRoomId,
-          sceneId: selectedSceneId,
-          characterId: messageMode === 'ic' ? activeCharacter.id : null,
+          sceneId: isUuid(selectedSceneId) ? selectedSceneId : null,
+          characterId: messageMode === 'ic' && isUuid(activeCharacter.id) ? activeCharacter.id : null,
           mode: messageMode,
           body: trimmed,
         });
@@ -710,7 +680,7 @@ export function App() {
     const trimmed = editingMessageDraft.trim();
     if (!trimmed) return;
 
-    if (supabase && authState === 'allowed') {
+    if (supabase && authState === 'allowed' && isUuid(message.id)) {
       try {
         const saved = rowToMessage(await updateMessageApi(message.id, trimmed));
         setMessages((current) =>
@@ -735,7 +705,7 @@ export function App() {
   async function deleteMessage(message: RpMessage) {
     if (!canManageMessage(message)) return;
 
-    if (supabase && authState === 'allowed') {
+    if (supabase && authState === 'allowed' && isUuid(message.id)) {
       try {
         await deleteMessageApi(message.id);
       } catch (error) {
@@ -756,7 +726,7 @@ export function App() {
     const nextCharacter = createDefaultCharacter(currentUserId);
     setCurrentView('my-page');
 
-    if (supabase && authState === 'allowed' && selectedRoomId && currentUserId) {
+    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && currentUserId) {
       try {
         const data = await createCharacterApi(selectedRoomId, nextCharacter);
         const created = rowToCharacter(data);
@@ -778,7 +748,7 @@ export function App() {
     event.preventDefault();
     const nextCharacter = normalizeCharacter(characterDraft);
 
-    if (supabase && authState === 'allowed' && selectedRoomId) {
+    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && isUuid(nextCharacter.id)) {
       try {
         const data = await updateCharacterApi(selectedRoomId, nextCharacter);
         const saved = rowToCharacter(data);
@@ -798,50 +768,10 @@ export function App() {
     setCharacterDraft(nextCharacter);
   }
 
-  function handleMapUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-
-    const nextUrl = URL.createObjectURL(file);
-    if (activeSceneMap?.imageUrl.startsWith('blob:')) URL.revokeObjectURL(activeSceneMap.imageUrl);
-    setSceneMaps((current) => [
-      ...current.filter((sceneMap) => sceneMap.sceneId !== activeRoom.id),
-      { sceneId: activeRoom.id, imageUrl: nextUrl },
-    ]);
-    setSelectedMapPinId(null);
-    event.target.value = '';
-  }
-
-  function handleMapClick(event: MouseEvent<HTMLDivElement>) {
-    if (!activeSceneMap) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    void assignSceneLocation(activeScene, x, y, mapPinLabel.trim());
-    setSelectedMapPinId(activeScene.id);
-    setMapPinLabel('');
-  }
-
-  function handleUseMapPin(scene: Scene) {
-    setDraft((current) => `${current ? `${current}\n` : ''}@${scene.locationName || scene.title} `);
-    setSelectedSceneId(scene.id);
-    setCurrentView('room');
-  }
-
-  async function handleCopyLog() {
-    try {
-      await navigator.clipboard.writeText(formattedLog);
-      setAuthMessage('整形ログをコピーしました。');
-    } catch {
-      setAuthMessage('クリップボードへコピーできませんでした。');
-    }
-  }
-
   async function handleArchiveCharacter() {
     if (!activeCharacter) return;
 
-    if (supabase && authState === 'allowed' && selectedRoomId) {
+    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && isUuid(activeCharacter.id)) {
       try {
         await archiveCharacterApi(selectedRoomId, activeCharacter.id);
       } catch (error) {
@@ -898,7 +828,7 @@ export function App() {
       tags: normalizeTags(roomDraft.tags),
     };
 
-    if (supabase && authState === 'allowed' && selectedRoomId && canEditActiveRoom) {
+    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && isUuid(nextRoom.id) && canEditActiveRoom) {
       try {
         const saved = rowToRoom(await updateRoomApi(nextRoom));
         setRooms((current) => current.map((room) => (room.id === saved.id ? saved : room)));
@@ -970,7 +900,7 @@ export function App() {
     const targetRoomId = activeRoom.id;
     const nextScene = createDefaultScene(targetRoomId, activeActorId);
 
-    if (supabase && authState === 'allowed' && targetRoomId) {
+    if (supabase && authState === 'allowed' && isUuid(targetRoomId)) {
       try {
         const created = rowToScene(await createSceneApi(nextScene));
         setScenes((current) => [...current, created]);
@@ -1001,7 +931,7 @@ export function App() {
     if (!canEditSceneDraft) return;
     const nextScene = normalizeScene(sceneDraft);
 
-    if (supabase && authState === 'allowed' && selectedRoomId) {
+    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && isUuid(nextScene.id)) {
       try {
         const saved = rowToScene(await updateSceneApi(nextScene));
         setScenes((current) => current.map((scene) => (scene.id === saved.id ? saved : scene)));
@@ -1021,7 +951,7 @@ export function App() {
   async function handleDeleteScene(scene: Scene) {
     if (!canDeleteScene(scene)) return;
 
-    if (supabase && authState === 'allowed') {
+    if (supabase && authState === 'allowed' && isUuid(scene.id)) {
       try {
         await deleteSceneApi(scene.id);
       } catch (error) {
@@ -1053,7 +983,7 @@ export function App() {
       canDeleteScenes: roomPermissionDraft.canDeleteScenes,
     };
 
-    if (supabase && authState === 'allowed' && currentUserId) {
+    if (supabase && authState === 'allowed' && currentUserId && activeRoomIdIsUuid) {
       const { error } = await supabase.from('room_scene_permissions').upsert({
         room_id: activeRoom.id,
         user_id: selectedRoomPermissionUserId,
@@ -1102,23 +1032,35 @@ export function App() {
     setAuthMessage('シーン編集者を追加しました。');
   }
 
-  async function assignSceneLocation(scene: Scene, x: number, y: number, locationName?: string) {
-    const nextScene = { ...scene, mapX: x, mapY: y, locationName: locationName || scene.locationName };
-    if (supabase && authState === 'allowed') {
-      if (!canEditSceneDraft) return;
-      try {
-        const saved = rowToScene(await updateSceneApi(nextScene));
-        setScenes((current) => current.map((currentScene) => (currentScene.id === saved.id ? saved : currentScene)));
-        setSceneDraft(saved);
-        return;
-      } catch (error) {
-        setAuthMessage(error instanceof Error ? error.message : 'シーン位置を保存できませんでした。');
-        return;
-      }
+  async function handleAllowDiscordAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || authState !== 'allowed' || currentAccessRole !== 'owner') return;
+
+    const discordUserId = allowedDiscordDraft.discordUserId.trim();
+    const displayName = allowedDiscordDraft.displayName.trim();
+    if (!/^[0-9]{17,20}$/.test(discordUserId)) {
+      setAuthMessage('DiscordユーザIDは17-20桁の数字で入力してください。');
+      return;
+    }
+    if (!displayName) {
+      setAuthMessage('表示名を入力してください。');
+      return;
     }
 
-    setScenes((current) => current.map((currentScene) => (currentScene.id === scene.id ? nextScene : currentScene)));
-    setSceneDraft((current) => (current.id === scene.id ? nextScene : current));
+    const { error } = await supabase.from('allowed_discord_accounts').upsert({
+      discord_user_id: discordUserId,
+      display_name: displayName,
+      role: allowedDiscordDraft.role,
+      is_active: true,
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAllowedDiscordDraft({ discordUserId: '', displayName: '', role: 'player' });
+    setAuthMessage('Discordアカウントを許可リストに追加しました。');
   }
 
   if (authState === 'checking') {
@@ -1186,14 +1128,6 @@ export function App() {
             >
               <UserRound size={16} />
               マイページ
-            </button>
-            <button
-              className={currentView === 'tools' ? 'topbar-tab active' : 'topbar-tab'}
-              type="button"
-              onClick={() => setCurrentView('tools')}
-            >
-              <Map size={16} />
-              補助
             </button>
           </div>
           <button className="icon-button" type="button" aria-label="ログアウト" onClick={handleSignOut}>
@@ -1795,6 +1729,54 @@ export function App() {
                   </div>
                 </section>
               )}
+              {currentAccessRole === 'owner' && (
+                <form className="owner-invite-card" aria-label="Discord許可リスト" onSubmit={handleAllowDiscordAccount}>
+                  <div className="section-title">
+                    <ShieldCheck size={16} />
+                    Discord許可
+                  </div>
+                  <label>
+                    DiscordユーザID
+                    <input
+                      inputMode="numeric"
+                      pattern="[0-9]{17,20}"
+                      value={allowedDiscordDraft.discordUserId}
+                      onChange={(event) =>
+                        setAllowedDiscordDraft({ ...allowedDiscordDraft, discordUserId: event.target.value })
+                      }
+                      placeholder="600301816315379723"
+                    />
+                  </label>
+                  <label>
+                    表示名
+                    <input
+                      value={allowedDiscordDraft.displayName}
+                      onChange={(event) =>
+                        setAllowedDiscordDraft({ ...allowedDiscordDraft, displayName: event.target.value })
+                      }
+                      placeholder="Hinata"
+                    />
+                  </label>
+                  <label>
+                    権限
+                    <select
+                      value={allowedDiscordDraft.role}
+                      onChange={(event) =>
+                        setAllowedDiscordDraft({ ...allowedDiscordDraft, role: event.target.value as AccessRole })
+                      }
+                    >
+                      <option value="player">player</option>
+                      <option value="gm">gm</option>
+                      <option value="viewer">viewer</option>
+                      <option value="owner">owner</option>
+                    </select>
+                  </label>
+                  <button className="button-primary" type="submit">
+                    <Plus size={16} />
+                    許可リストに追加
+                  </button>
+                </form>
+              )}
               <div className="section-title">
                 <UsersRound size={16} />
                 キャラ一覧
@@ -1825,130 +1807,6 @@ export function App() {
               onSave={handleSaveCharacter}
               setCharacterDraft={setCharacterDraft}
             />
-          </div>
-        </section>
-      ) : currentView === 'tools' ? (
-        <section className="tools-page" aria-label="世界観補助">
-          <div className="my-page-header">
-            <div>
-              <p>World Support</p>
-              <h1>世界観補助</h1>
-            </div>
-          </div>
-
-          <div className="tools-grid">
-            <section className="tool-panel" aria-label="マップ作成">
-              <div className="tool-panel-header">
-                <div>
-                  <p>Map Board</p>
-                  <h2>マップ作成</h2>
-                </div>
-                <label className="button-secondary upload-button">
-                  <Upload size={16} />
-                  画像アップロード
-                  <input type="file" accept="image/*" onChange={handleMapUpload} />
-                </label>
-              </div>
-              <div className="field-grid two">
-                <label>
-                  配置するシーン
-                  <select value={selectedSceneId} onChange={(event) => setSelectedSceneId(event.target.value)}>
-                    {roomScenes.map((scene) => (
-                      <option key={scene.id} value={scene.id}>
-                        {scene.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  場所名
-                  <input
-                    value={mapPinLabel}
-                    onChange={(event) => setMapPinLabel(event.target.value)}
-                    placeholder={activeScene.locationName || '奥の扉前'}
-                  />
-                </label>
-                <label>
-                  ルーム
-                  <input value={activeRoom.title} readOnly />
-                </label>
-              </div>
-              <div
-                className={activeSceneMap ? 'map-canvas has-image' : 'map-canvas'}
-                role="button"
-                tabIndex={0}
-                onClick={handleMapClick}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
-                }}
-              >
-                {activeSceneMap ? (
-                  <>
-                    <img src={activeSceneMap.imageUrl} alt={`${activeRoom.title}のマップ`} />
-                    {scenePins.map((pin) => (
-                      <button
-                        className={pin.id === selectedMapPin?.id ? 'map-pin active' : 'map-pin'}
-                        key={pin.id}
-                        type="button"
-                        style={{ left: `${pin.mapX}%`, top: `${pin.mapY}%` }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedMapPinId(pin.id);
-                          setSelectedSceneId(pin.id);
-                        }}
-                        aria-label={pin.title}
-                      >
-                        <MapPin size={15} />
-                      </button>
-                    ))}
-                  </>
-                ) : (
-                  <div className="empty-map">
-                    <Map size={32} />
-                    <span>マップ未設定</span>
-                  </div>
-                )}
-              </div>
-              {selectedMapPin && (
-                <div className="pin-detail">
-                  <div>
-                    <strong>{selectedMapPin.locationName || selectedMapPin.title}</strong>
-                    <span>
-                      {selectedMapPin.title} / {selectedMapPin.tags.join(', ') || 'no tags'}
-                    </span>
-                  </div>
-                  <button className="button-secondary" type="button" onClick={() => handleUseMapPin(selectedMapPin)}>
-                    <MessageSquareText size={16} />
-                    この地点で話す
-                  </button>
-                </div>
-              )}
-            </section>
-
-            <section className="tool-panel" aria-label="ログ整形">
-              <div className="tool-panel-header">
-                <div>
-                  <p>Session Log</p>
-                  <h2>ログ整形</h2>
-                </div>
-                <button className="button-secondary" type="button" onClick={handleCopyLog}>
-                  <ClipboardCopy size={16} />
-                  コピー
-                </button>
-              </div>
-              <div className="segmented segmented-wide" aria-label="ログ形式">
-                <button className={logFormat === 'chat' ? 'active' : ''} type="button" onClick={() => setLogFormat('chat')}>
-                  Chat
-                </button>
-                <button className={logFormat === 'script' ? 'active' : ''} type="button" onClick={() => setLogFormat('script')}>
-                  Script
-                </button>
-                <button className={logFormat === 'markdown' ? 'active' : ''} type="button" onClick={() => setLogFormat('markdown')}>
-                  MD
-                </button>
-              </div>
-              <textarea className="log-output" value={formattedLog} readOnly />
-            </section>
           </div>
         </section>
       ) : (
@@ -2133,21 +1991,6 @@ export function App() {
               <li>未解決: 黒い封蝋の手紙</li>
               <li>次の焦点: 奥の扉</li>
             </ul>
-          </section>
-          <section className="memo-block">
-            <h2>Scene Map</h2>
-            {activeSceneMap ? (
-              <div className="scene-map-preview">
-                <img src={activeSceneMap.imageUrl} alt={`${activeRoom.title}のマップ`} />
-                <span>{scenePins.length} scene pins</span>
-              </div>
-            ) : (
-              <p>このルームにはまだマップがありません。</p>
-            )}
-            <button className="button-secondary rail-action" type="button" onClick={() => setCurrentView('tools')}>
-              <Map size={16} />
-              マップを設定
-            </button>
           </section>
         </aside>
       </div>
@@ -2786,16 +2629,6 @@ function toMapCoordinate(value: unknown) {
   return Math.min(100, Math.max(0, parsed));
 }
 
-function formatLog(messages: Array<RpMessage & { character?: Character }>, format: LogFormat) {
-  if (format === 'script') {
-    return messages.map((message) => `${message.author}: ${message.body}`).join('\n');
-  }
-  if (format === 'markdown') {
-    return messages
-      .map((message) => `- **${message.author}** (${message.mode.toUpperCase()} / ${message.createdAt})\n  ${message.body}`)
-      .join('\n');
-  }
-  return messages
-    .map((message) => `[${message.createdAt}] ${message.mode.toUpperCase()} ${message.author}: ${message.body}`)
-    .join('\n');
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && uuidPattern.test(value);
 }

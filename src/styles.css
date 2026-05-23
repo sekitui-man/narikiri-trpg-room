@@ -290,12 +290,6 @@ select:focus {
   padding: 44px 32px;
 }
 
-.tools-page {
-  width: min(100%, 1320px);
-  margin: 0 auto;
-  padding: 44px 32px;
-}
-
 .management-page {
   width: min(100%, 1220px);
   margin: 0 auto;
@@ -445,13 +439,6 @@ select:focus {
   background: var(--surface);
 }
 
-.tools-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
-  gap: 26px;
-  align-items: start;
-}
-
 .tool-panel {
   display: grid;
   gap: 16px;
@@ -565,109 +552,9 @@ select:focus {
   font-weight: 700;
 }
 
-.upload-button {
-  position: relative;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.upload-button input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.map-canvas {
-  position: relative;
-  min-height: 420px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--neutral);
-  overflow: hidden;
-}
-
-.map-canvas.has-image {
-  cursor: crosshair;
-}
-
-.map-canvas img {
-  width: 100%;
-  height: 100%;
-  min-height: 420px;
-  display: block;
-  object-fit: contain;
-  background: var(--neutral);
-}
-
-.empty-map {
-  min-height: 420px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 10px;
-  color: var(--secondary);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.map-pin {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  transform: translate(-50%, -100%);
-  border: 1px solid var(--surface);
-  border-radius: 9999px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  background: var(--primary);
-  color: var(--surface);
-}
-
-.map-pin.active {
-  background: var(--tertiary);
-}
-
-.pin-detail {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
-}
-
-.pin-detail div {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.pin-detail strong {
-  color: var(--primary);
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
-}
-
-.pin-detail span {
-  color: var(--secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
 .segmented-wide {
   width: 100%;
   grid-template-columns: repeat(3, 1fr);
-}
-
-.log-output {
-  min-height: 560px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 400;
 }
 
 .tag-row {
@@ -886,6 +773,29 @@ select:focus {
   line-height: 22px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.owner-invite-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.owner-invite-card label {
+  display: grid;
+  gap: 6px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.owner-invite-card .button-primary {
+  width: 100%;
+  justify-content: center;
 }
 
 .character-item {
@@ -1159,29 +1069,6 @@ select:focus {
   background: var(--surface);
 }
 
-.scene-map-preview {
-  position: relative;
-  display: grid;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.scene-map-preview img {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  object-fit: cover;
-  background: var(--neutral);
-}
-
-.scene-map-preview span {
-  color: var(--secondary);
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 400;
-}
-
 .character-editor {
   display: grid;
   gap: 16px;
@@ -1448,7 +1335,6 @@ select:focus {
   }
 
   .my-page,
-  .tools-page,
   .management-page {
     padding: 26px 16px;
   }
@@ -1481,20 +1367,9 @@ select:focus {
     position: static;
   }
 
-  .tools-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .tool-panel-header,
-  .pin-detail {
+  .tool-panel-header {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .map-canvas,
-  .map-canvas img,
-  .empty-map {
-    min-height: 320px;
   }
 
   .left-rail {

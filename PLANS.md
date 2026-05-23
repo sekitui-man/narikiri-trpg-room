@@ -20,12 +20,12 @@
 - The room menu opens a room list; room settings open from each room's gear button in a modal dialog.
 - A room is a collection of scenes.
 - Scene listing, creation, and creator-only settings live inside the selected room menu.
-- Scenes store one location, a time label, and can be pinned on the room map.
+- Scenes store one location and a time label.
 - Room creators may delegate scene create/delete permission to selected room members.
 - Scene creators may delegate scene setting edit permission to selected room members.
 - My Page shows the signed-in Discord profile.
 - Internal CoC 6th edition investigator database with per-user character ownership.
-- World support tools for room map image annotation and session log formatting.
+- Owner-managed Discord account allowlisting from My Page.
 - Message authors may edit or delete only their own RP messages.
 - Cloudflare Pages Functions boundary for character CRUD, room mutations, scene mutations, and RP message mutations.
 - Supabase SQL schema with RLS policies for invited room members.

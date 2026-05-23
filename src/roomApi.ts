@@ -39,7 +39,7 @@ export async function deleteSceneApi(sceneId: string) {
 
 export async function createMessageApi(message: {
   roomId: string;
-  sceneId: string;
+  sceneId: string | null;
   characterId: string | null;
   mode: RpMessage['mode'];
   body: string;

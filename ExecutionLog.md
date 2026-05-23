@@ -39,3 +39,4 @@
 - Added a collapsible in-room navigation rail with a narrow reopen tab.
 - Added room-message realtime subscription code, Realtime SQL setup for `rp_messages`, gutter spacing for the collapsed room nav tab, and row-click scene entry in the room scene list.
 - Stabilized settings modal dimensions across tabs and surfaced Discord account IDs in permission selectors.
+- Removed the auxiliary/tools map UI, guarded room-scoped API calls to UUID room IDs, and enabled owner-managed Discord allowlisting.

@@ -339,7 +339,7 @@ alter table public.scene_edit_permissions enable row level security;
 alter table public.rp_messages enable row level security;
 
 grant select on public.allowed_members to authenticated;
-grant select on public.allowed_discord_accounts to authenticated;
+grant select, insert, update on public.allowed_discord_accounts to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update on public.rooms to authenticated;
 grant select, insert, update, delete on public.room_members to authenticated;
@@ -360,6 +360,28 @@ on public.allowed_discord_accounts
 for select
 to authenticated
 using (discord_user_id = app_private.current_discord_user_id() and is_active = true);
+
+drop policy if exists "Owners can read Discord allowlist" on public.allowed_discord_accounts;
+create policy "Owners can read Discord allowlist"
+on public.allowed_discord_accounts
+for select
+to authenticated
+using (app_private.current_access_role() = 'owner');
+
+drop policy if exists "Owners can add Discord allowlist entries" on public.allowed_discord_accounts;
+create policy "Owners can add Discord allowlist entries"
+on public.allowed_discord_accounts
+for insert
+to authenticated
+with check (app_private.current_access_role() = 'owner');
+
+drop policy if exists "Owners can update Discord allowlist entries" on public.allowed_discord_accounts;
+create policy "Owners can update Discord allowlist entries"
+on public.allowed_discord_accounts
+for update
+to authenticated
+using (app_private.current_access_role() = 'owner')
+with check (app_private.current_access_role() = 'owner');
 
 create policy "Allowed users can read their own profile"
 on public.profiles
