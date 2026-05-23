@@ -17,6 +17,10 @@ export async function updateRoomApi(room: Room) {
   return response.room as RoomRow;
 }
 
+export async function deleteRoomApi(roomId: string) {
+  await apiRequest(`/api/rooms/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
+}
+
 export async function createSceneApi(scene: Scene) {
   const response = await apiRequest('/api/scenes', {
     method: 'POST',

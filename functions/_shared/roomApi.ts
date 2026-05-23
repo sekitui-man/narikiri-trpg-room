@@ -63,6 +63,53 @@ export async function updateRoom(context: PagesContext) {
   return json({ room: data });
 }
 
+export async function deleteRoom(context: PagesContext) {
+  const { supabase, userId } = await createAuthenticatedSupabase(context);
+  const id = requireUuid(getParam(context, 'id'), 'id');
+
+  const { data: room, error: roomError } = await supabase
+    .from('rooms')
+    .select('created_by')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (roomError) throw new ApiError(400, roomError.message);
+  if (!room) throw new ApiError(404, 'Room not found');
+
+  const isCreator = room.created_by === userId;
+
+  if (!isCreator) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const discordUserId = profile?.email?.startsWith('discord:')
+      ? profile.email.slice('discord:'.length)
+      : null;
+
+    if (!discordUserId) throw new ApiError(403, 'ルームを削除する権限がありません。');
+
+    const { data: account } = await supabase
+      .from('allowed_discord_accounts')
+      .select('role')
+      .eq('discord_user_id', discordUserId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (account?.role !== 'owner') throw new ApiError(403, 'ルームを削除する権限がありません。');
+  }
+
+  const { error } = await supabase
+    .from('rooms')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new ApiError(400, error.message);
+  return json({ deleted: true, id });
+}
+
 export async function createScene(context: PagesContext) {
   const { supabase, userId } = await createAuthenticatedSupabase(context);
   const body = await readJsonObject(context.request);

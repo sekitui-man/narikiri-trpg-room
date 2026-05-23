@@ -43,6 +43,7 @@ import {
   createRoomApi,
   createSceneApi,
   deleteMessageApi,
+  deleteRoomApi,
   deleteSceneApi,
   updateMessageApi,
   updateRoomApi,
@@ -96,7 +97,7 @@ type SceneDraft = Pick<Scene, 'id' | 'title' | 'summary' | 'status' | 'locationN
 type DerivedCoCValues = ReturnType<typeof deriveCoCValues>;
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const characteristicKeys: Array<keyof CoCCharacteristics> = ['str', 'con', 'siz', 'int', 'pow', 'dex', 'app', 'edu'];
 const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
   { key: 'description', label: '外見・描写' },
@@ -248,6 +249,8 @@ export function App() {
   const recentScenes = roomScenes.slice(-3).reverse();
   const selectedSpeakerIsPlayer = selectedCharacterId === playerSpeakerId;
   const messageMode: 'ic' | 'ooc' = selectedSpeakerIsPlayer ? 'ooc' : 'ic';
+  const canDeleteRoom = (room: Room) =>
+    authState === 'demo' || room.createdBy === currentUserId || currentAccessRole === 'owner';
   const canDeleteScene = (scene: Scene) =>
     authState === 'demo' ||
     activeRoom.createdBy === currentUserId ||
@@ -425,6 +428,7 @@ export function App() {
     const { data: rooms, error: roomsError } = await supabase
       .from('rooms')
       .select('id, title, summary, tags, created_by')
+      .is('deleted_at', null)
       .order('created_at', { ascending: true });
 
     if (roomsError) {
@@ -895,6 +899,35 @@ export function App() {
     setSceneDraft(nextScene);
   }
 
+  async function handleDeleteRoom(room: Room) {
+    if (!canDeleteRoom(room)) return;
+    if (!window.confirm(`ルーム「${room.title}」を削除しますか？この操作は取り消せません。`)) return;
+
+    if (supabase && authState === 'allowed' && isUuid(room.id)) {
+      try {
+        await deleteRoomApi(room.id);
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : 'ルームを削除できませんでした。');
+        return;
+      }
+    }
+
+    setRooms((current) => {
+      const nextRooms = current.filter((r) => r.id !== room.id);
+      const nextRoom = nextRooms[0];
+      if (nextRoom) {
+        setSelectedRoomId(nextRoom.id);
+        setRoomDraft(nextRoom);
+      } else {
+        setSelectedRoomId(null);
+        setRoomDraft(emptyRoom);
+      }
+      return nextRooms;
+    });
+    setIsRoomConfigOpen(false);
+    setCurrentView('rooms');
+  }
+
   async function handleDeleteScene(scene: Scene) {
     if (!canDeleteScene(scene)) return;
 
@@ -1148,6 +1181,16 @@ export function App() {
                         >
                           <Settings size={15} />
                         </button>
+                        {canDeleteRoom(room) && (
+                          <button
+                            className="mini-icon-button danger"
+                            type="button"
+                            onClick={() => void handleDeleteRoom(room)}
+                            aria-label="ルームを削除"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                       {isExpanded && (
                         <div className="room-accordion" aria-label={`${room.title}のシーン`}>
@@ -1244,6 +1287,16 @@ export function App() {
                         <Save size={16} />
                         保存
                       </button>
+                      {canDeleteRoom(roomDraft) && (
+                        <button
+                          className="button-danger"
+                          type="button"
+                          onClick={() => void handleDeleteRoom(roomDraft)}
+                        >
+                          <Trash2 size={16} />
+                          ルームを削除
+                        </button>
+                      )}
                     </div>
                   </form>
                 ) : (
@@ -1466,6 +1519,16 @@ export function App() {
                         <Save size={16} />
                         保存
                       </button>
+                      {canDeleteRoom(roomDraft) && (
+                        <button
+                          className="button-danger"
+                          type="button"
+                          onClick={() => void handleDeleteRoom(roomDraft)}
+                        >
+                          <Trash2 size={16} />
+                          ルームを削除
+                        </button>
+                      )}
                     </div>
                   </form>
                 ) : (
