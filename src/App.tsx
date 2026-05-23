@@ -64,6 +64,7 @@ type AllowedAccount = {
   discordUserId: string;
   displayName: string;
   avatarUrl: string | null;
+  hasProfile: boolean;
   role: AccessRole;
   isActive: boolean;
 };
@@ -1059,7 +1060,7 @@ export function App() {
     setAllowedAccounts((current) => {
       const exists = current.some((a) => a.discordUserId === discordUserId);
       if (exists) return current.map((a) => a.discordUserId === discordUserId ? { ...a, role: allowedDiscordDraft.role, isActive: true } : a);
-      return [...current, { discordUserId, displayName: '(pending)', avatarUrl: null, role: allowedDiscordDraft.role, isActive: true }];
+      return [...current, { discordUserId, displayName: '(pending)', avatarUrl: null, hasProfile: false, role: allowedDiscordDraft.role, isActive: true }];
     });
     showToast('Discordアカウントを許可リストに追加しました。');
   }
@@ -1078,6 +1079,7 @@ export function App() {
         discordUserId: row.discord_user_id,
         displayName: profile?.display_name ?? row.display_name,
         avatarUrl: profile?.avatar_url ?? null,
+        hasProfile: Boolean(profile),
         role: row.role as AccessRole,
         isActive: row.is_active,
       };
@@ -1839,7 +1841,14 @@ export function App() {
                           </span>
                         )}
                         <span className="admin-user-row-info">
-                          <strong>{account.displayName}</strong>
+                          <strong className="admin-user-name">
+                            {account.displayName}
+                            {!account.hasProfile && (
+                              <span className="login-state-icon" title="未ログイン" aria-label="未ログイン">
+                                <UserRound size={13} />
+                              </span>
+                            )}
+                          </strong>
                           {!account.isActive && <small>停止中</small>}
                         </span>
                         <span className="access-chip">{account.role}</span>
@@ -1864,7 +1873,14 @@ export function App() {
                       </span>
                     )}
                     <div>
-                      <strong>{account.displayName}</strong>
+                      <strong className="admin-detail-name">
+                        {account.displayName}
+                        {!account.hasProfile && (
+                          <span className="login-state-icon" title="未ログイン" aria-label="未ログイン">
+                            <UserRound size={14} />
+                          </span>
+                        )}
+                      </strong>
                       <small>Discord ID: {account.discordUserId}</small>
                     </div>
                   </div>

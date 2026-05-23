@@ -1621,6 +1621,26 @@ select:focus {
   white-space: nowrap;
 }
 
+.admin-user-name,
+.admin-detail-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.login-state-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--neutral);
+  color: var(--secondary);
+}
+
 .admin-user-row-info small {
   font-size: 11px;
   color: #dc2626;
