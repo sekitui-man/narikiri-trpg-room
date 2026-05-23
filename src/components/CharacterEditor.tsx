@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
-import { Archive, Save } from 'lucide-react';
+import { Archive, Pencil, Save, X } from 'lucide-react';
 import {
   cocSkillDefinitions,
   getSkillCategories,
@@ -22,7 +23,7 @@ type CharacterEditorProps = {
   characterDraft: Character;
   currentUserId: string | null;
   onArchive: () => void;
-  onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   setCharacterDraft: Dispatch<SetStateAction<Character>>;
 };
 
@@ -38,10 +39,34 @@ export function CharacterEditor({
   onSave,
   setCharacterDraft,
 }: CharacterEditorProps) {
+  const [isEditing, setIsEditing] = useState(!canArchiveCharacter);
+  const [editingSnapshot, setEditingSnapshot] = useState<Character | null>(null);
   const occupationBudget = characterDraft.characteristics.edu * 20;
   const interestBudget = characterDraft.characteristics.int * 10;
   const occupationUsed = Object.values(characterDraft.skills).reduce((sum, skill) => sum + skill.occupation, 0);
   const interestUsed = Object.values(characterDraft.skills).reduce((sum, skill) => sum + skill.interest, 0);
+
+  useEffect(() => {
+    setIsEditing(!canArchiveCharacter);
+    setEditingSnapshot(null);
+  }, [characterDraft.id, canArchiveCharacter]);
+
+  function startEditing() {
+    setEditingSnapshot(characterDraft);
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    if (editingSnapshot) setCharacterDraft(editingSnapshot);
+    setEditingSnapshot(null);
+    setIsEditing(!canArchiveCharacter);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    await onSave(event);
+    setEditingSnapshot(null);
+    setIsEditing(false);
+  }
 
   function updateSkill(name: string, field: keyof Omit<CoCSkillEntry, 'base'>, value: number) {
     setCharacterDraft((current) => {
@@ -63,111 +88,82 @@ export function CharacterEditor({
   }
 
   return (
-    <form className="character-editor character-editor-page" onSubmit={onSave}>
+    <form className="character-editor character-editor-page" onSubmit={handleSubmit}>
       <div className="editor-heading">
         <div>
           <p>Character Sheet</p>
           <h2>{characterDraft.name}</h2>
         </div>
-        <span className="access-chip">{characterDraft.ownerId === currentUserId ? 'MY PC' : 'ROOM PC'}</span>
+        <div className="editor-heading-actions">
+          <span className="access-chip">{characterDraft.ownerId === currentUserId ? 'MY PC' : 'ROOM PC'}</span>
+          {!isEditing && canManageActiveCharacter && (
+            <button className="button-secondary compact-button" type="button" onClick={startEditing}>
+              <Pencil size={15} />
+              編集
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="field-grid two">
-        <label>
-          名前
-          <input
-            value={characterDraft.name}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          プレイヤー
-          <input
-            value={characterDraft.player}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, player: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          職業
-          <input
-            value={characterDraft.occupation}
-            onChange={(event) =>
-              setCharacterDraft({
-                ...characterDraft,
-                occupation: event.target.value,
-                archetype: event.target.value || characterDraft.archetype,
-              })
-            }
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          年齢
-          <input
-            value={characterDraft.age}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, age: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          性別
-          <input
-            value={characterDraft.gender}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, gender: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          色
-          <input
-            value={characterDraft.color}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, color: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          住所
-          <input
-            value={characterDraft.residence}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, residence: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          出身
-          <input
-            value={characterDraft.birthplace}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, birthplace: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
+        {isEditing ? (
+          <>
+            <EditableTextField label="名前" value={characterDraft.name} onChange={(value) => setCharacterDraft({ ...characterDraft, name: value })} />
+            <EditableTextField label="プレイヤー" value={characterDraft.player} onChange={(value) => setCharacterDraft({ ...characterDraft, player: value })} />
+            <EditableTextField
+              label="職業"
+              value={characterDraft.occupation}
+              onChange={(value) =>
+                setCharacterDraft({
+                  ...characterDraft,
+                  occupation: value,
+                  archetype: value || characterDraft.archetype,
+                })
+              }
+            />
+            <EditableTextField label="年齢" value={characterDraft.age} onChange={(value) => setCharacterDraft({ ...characterDraft, age: value })} />
+            <EditableTextField label="性別" value={characterDraft.gender} onChange={(value) => setCharacterDraft({ ...characterDraft, gender: value })} />
+            <EditableTextField label="色" value={characterDraft.color} onChange={(value) => setCharacterDraft({ ...characterDraft, color: value })} />
+            <EditableTextField label="住所" value={characterDraft.residence} onChange={(value) => setCharacterDraft({ ...characterDraft, residence: value })} />
+            <EditableTextField label="出身" value={characterDraft.birthplace} onChange={(value) => setCharacterDraft({ ...characterDraft, birthplace: value })} />
+          </>
+        ) : (
+          <>
+            <ReadField label="名前" value={characterDraft.name} />
+            <ReadField label="プレイヤー" value={characterDraft.player} />
+            <ReadField label="職業" value={characterDraft.occupation} />
+            <ReadField label="年齢" value={characterDraft.age} />
+            <ReadField label="性別" value={characterDraft.gender} />
+            <ReadField label="色" value={characterDraft.color} />
+            <ReadField label="住所" value={characterDraft.residence} />
+            <ReadField label="出身" value={characterDraft.birthplace} />
+          </>
+        )}
       </div>
 
       <section className="editor-section">
         <h3>Characteristics</h3>
         <div className="stat-grid">
           {characteristicKeys.map((key) => (
-            <label key={key}>
-              {key.toUpperCase()}
-              <input
-                type="number"
-                min="0"
-                max="99"
+            isEditing ? (
+              <EditableNumberField
+                key={key}
+                label={key.toUpperCase()}
+                max={99}
                 value={characterDraft.characteristics[key]}
-                onChange={(event) =>
+                onChange={(value) =>
                   setCharacterDraft({
                     ...characterDraft,
                     characteristics: {
                       ...characterDraft.characteristics,
-                      [key]: Number(event.target.value),
+                      [key]: value,
                     },
                   })
                 }
-                disabled={!canManageActiveCharacter}
               />
-            </label>
+            ) : (
+              <ReadField key={key} label={key.toUpperCase()} value={characterDraft.characteristics[key]} />
+            )
           ))}
         </div>
         <div className="derived-grid">
@@ -181,37 +177,19 @@ export function CharacterEditor({
       <section className="editor-section">
         <h3>Status</h3>
         <div className="field-grid three">
-          <label>
-            SAN
-            <input
-              type="number"
-              value={characterDraft.sanityCurrent}
-              onChange={(event) => setCharacterDraft({ ...characterDraft, sanityCurrent: Number(event.target.value) })}
-              disabled={!canManageActiveCharacter}
-            />
-          </label>
-          <label>
-            HP / {activeDerived.hitPointsMax}
-            <input
-              type="number"
-              value={characterDraft.hitPointsCurrent}
-              onChange={(event) =>
-                setCharacterDraft({ ...characterDraft, hitPointsCurrent: Number(event.target.value) })
-              }
-              disabled={!canManageActiveCharacter}
-            />
-          </label>
-          <label>
-            MP / {activeDerived.magicPointsMax}
-            <input
-              type="number"
-              value={characterDraft.magicPointsCurrent}
-              onChange={(event) =>
-                setCharacterDraft({ ...characterDraft, magicPointsCurrent: Number(event.target.value) })
-              }
-              disabled={!canManageActiveCharacter}
-            />
-          </label>
+          {isEditing ? (
+            <>
+              <EditableNumberField label="SAN" value={characterDraft.sanityCurrent} onChange={(value) => setCharacterDraft({ ...characterDraft, sanityCurrent: value })} />
+              <EditableNumberField label={`HP / ${activeDerived.hitPointsMax}`} value={characterDraft.hitPointsCurrent} onChange={(value) => setCharacterDraft({ ...characterDraft, hitPointsCurrent: value })} />
+              <EditableNumberField label={`MP / ${activeDerived.magicPointsMax}`} value={characterDraft.magicPointsCurrent} onChange={(value) => setCharacterDraft({ ...characterDraft, magicPointsCurrent: value })} />
+            </>
+          ) : (
+            <>
+              <ReadField label="SAN" value={characterDraft.sanityCurrent} />
+              <ReadField label={`HP / ${activeDerived.hitPointsMax}`} value={characterDraft.hitPointsCurrent} />
+              <ReadField label={`MP / ${activeDerived.magicPointsMax}`} value={characterDraft.magicPointsCurrent} />
+            </>
+          )}
         </div>
       </section>
 
@@ -244,18 +222,21 @@ export function CharacterEditor({
                     <div className="skill-row" role="row" key={definition.name}>
                       <span>{definition.name}</span>
                       <span>{base}</span>
-                      {(['occupation', 'interest', 'growth', 'other'] as const).map((field) => (
-                        <input
-                          key={field}
-                          type="number"
-                          min="0"
-                          max="999"
-                          value={normalizedEntry[field]}
-                          onChange={(event) => updateSkill(definition.name, field, Number(event.target.value))}
-                          disabled={!canManageActiveCharacter}
-                          aria-label={`${definition.name} ${field}`}
-                        />
-                      ))}
+                      {(['occupation', 'interest', 'growth', 'other'] as const).map((field) =>
+                        isEditing ? (
+                          <input
+                            key={field}
+                            type="number"
+                            min="0"
+                            max="999"
+                            value={normalizedEntry[field]}
+                            onChange={(event) => updateSkill(definition.name, field, Number(event.target.value))}
+                            aria-label={`${definition.name} ${field}`}
+                          />
+                        ) : (
+                          <span key={field}>{normalizedEntry[field]}</span>
+                        ),
+                      )}
                       <strong>{getSkillTotal(normalizedEntry)}</strong>
                     </div>
                   );
@@ -267,66 +248,116 @@ export function CharacterEditor({
 
       <section className="editor-section">
         <h3>Equipment</h3>
-        <label>
-          武器
-          <textarea
-            value={characterDraft.weapons}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, weapons: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          所持品
-          <textarea
-            value={characterDraft.possessions}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, possessions: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
+        {isEditing ? (
+          <>
+            <EditableTextarea label="武器" value={characterDraft.weapons} onChange={(value) => setCharacterDraft({ ...characterDraft, weapons: value })} />
+            <EditableTextarea label="所持品" value={characterDraft.possessions} onChange={(value) => setCharacterDraft({ ...characterDraft, possessions: value })} />
+          </>
+        ) : (
+          <>
+            <ReadField label="武器" value={characterDraft.weapons} />
+            <ReadField label="所持品" value={characterDraft.possessions} />
+          </>
+        )}
       </section>
 
       <section className="editor-section">
         <h3>Background</h3>
-        {backgroundFields.map((field) => (
-          <label key={field.key}>
-            {field.label}
-            <textarea
+        {backgroundFields.map((field) =>
+          isEditing ? (
+            <EditableTextarea
+              key={field.key}
+              label={field.label}
               value={characterDraft.background[field.key]}
-              onChange={(event) =>
+              onChange={(value) =>
                 setCharacterDraft({
                   ...characterDraft,
-                  background: { ...characterDraft.background, [field.key]: event.target.value },
+                  background: { ...characterDraft.background, [field.key]: value },
                 })
               }
-              disabled={!canManageActiveCharacter}
             />
-          </label>
-        ))}
-        <label>
-          メモ
-          <textarea
-            value={characterDraft.memo}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, memo: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
+          ) : (
+            <ReadField key={field.key} label={field.label} value={characterDraft.background[field.key]} />
+          ),
+        )}
+        {isEditing ? (
+          <EditableTextarea label="メモ" value={characterDraft.memo} onChange={(value) => setCharacterDraft({ ...characterDraft, memo: value })} />
+        ) : (
+          <ReadField label="メモ" value={characterDraft.memo} />
+        )}
       </section>
 
       <div className="editor-actions">
-        <button className="button-primary" type="submit" disabled={!canManageActiveCharacter}>
-          <Save size={16} />
-          保存
-        </button>
-        <button
-          className="button-secondary"
-          type="button"
-          onClick={onArchive}
-          disabled={!canManageActiveCharacter || !canArchiveCharacter}
-        >
-          <Archive size={16} />
-          アーカイブ
-        </button>
+        {isEditing ? (
+          <>
+            <button className="button-primary" type="submit" disabled={!canManageActiveCharacter}>
+              <Save size={16} />
+              保存
+            </button>
+            <button className="button-secondary" type="button" onClick={cancelEditing}>
+              <X size={16} />
+              キャンセル
+            </button>
+          </>
+        ) : (
+          <button className="button-primary" type="button" onClick={startEditing} disabled={!canManageActiveCharacter}>
+            <Pencil size={16} />
+            編集
+          </button>
+        )}
+        {canArchiveCharacter && (
+          <button className="button-secondary" type="button" onClick={onArchive} disabled={!canManageActiveCharacter}>
+            <Archive size={16} />
+            アーカイブ
+          </button>
+        )}
       </div>
     </form>
+  );
+}
+
+function ReadField({ label, value }: { label: string; value: string | number | null | undefined }) {
+  return (
+    <div className="read-field">
+      <span>{label}</span>
+      <strong>{value === null || value === undefined || value === '' ? '未設定' : value}</strong>
+    </div>
+  );
+}
+
+function EditableTextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label>
+      {label}
+      <input value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function EditableNumberField({
+  label,
+  max,
+  value,
+  onChange,
+}: {
+  label: string;
+  max?: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <input type="number" min="0" max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
+  );
+}
+
+function EditableTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label>
+      {label}
+      <textarea value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
   );
 }

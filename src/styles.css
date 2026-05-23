@@ -1202,6 +1202,21 @@ select:focus {
   gap: 16px;
 }
 
+.editor-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.compact-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 14px;
+  line-height: 18px;
+}
+
 .editor-heading h2,
 .editor-section h3 {
   margin: 0;

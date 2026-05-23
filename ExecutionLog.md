@@ -49,3 +49,4 @@
 - Removed the redundant composer mode chip because the selected speaker already indicates whether the post is character-side or player-side.
 - Added a My Page investigator menu, split investigator list and new-investigator screens, and verified `npm run build` plus local Vite HTTP 200.
 - Split investigator sheet editing out of `App.tsx` into `components/CharacterEditor.tsx` and moved character normalization/default/derived-value logic into `characterModel.ts`; verified `npm run build`.
+- Changed existing investigator sheets to open in read-only mode with an explicit edit/cancel flow while keeping new investigator sheets editable by default; verified `npm run build` and local Browser interaction.
