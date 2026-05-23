@@ -38,6 +38,8 @@ Deploy the alpha TRPG roleplay app to Cloudflare Pages with a new Supabase backe
 - Room cards expose an accordion with a down-arrow control for quickly viewing that room's scenes without replacing the room list. The room card's primary button is labeled `入室` and opens the full room-content scene list.
 - A scene belongs to one room, has one location plus a time label, and supports tags. Scene listing and creation are handled inside the selected room-content screen; choosing a scene opens the RP scene conversation. Scene settings open as a modal dialog with tabs.
 - Users who can edit a scene can open its settings modal directly from both the full scene list and the room-card accordion.
+- Scene and room permission selectors show Discord account IDs for room members where available.
+- Settings modals keep a stable tab width and minimum panel height across tab switches.
 - Room-level scene creation/deletion delegation is configured only inside the room settings modal permission tab; it is not shown as an inline form in the room scene list.
 - Scene creation and deletion are restricted to the room creator and users explicitly granted room scene permissions by that creator. Scene setting edits are restricted to the scene creator and users explicitly granted scene edit permission by that scene creator. Room members keep read access.
 - The room sidebar only shows recent scenes and links back to the room menu for full scene management.

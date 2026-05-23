@@ -21,11 +21,25 @@ create table if not exists public.allowed_discord_accounts (
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
+  discord_user_id text unique check (discord_user_id is null or discord_user_id ~ '^[0-9]{17,20}$'),
   display_name text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (email = lower(email))
 );
+alter table public.profiles add column if not exists discord_user_id text unique;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_discord_user_id_format'
+  ) then
+    alter table public.profiles
+      add constraint profiles_discord_user_id_format
+      check (discord_user_id is null or discord_user_id ~ '^[0-9]{17,20}$');
+  end if;
+end $$;
 
 create table if not exists public.rooms (
   id uuid primary key default gen_random_uuid(),
@@ -378,6 +392,7 @@ with check (
   app_private.is_allowed_member()
   and id = (select auth.uid())
   and email = app_private.current_profile_key()
+  and (discord_user_id is null or discord_user_id = app_private.current_discord_user_id())
 );
 
 create policy "Allowed users can update their own profile"
@@ -389,6 +404,7 @@ with check (
   app_private.is_allowed_member()
   and id = (select auth.uid())
   and email = app_private.current_profile_key()
+  and (discord_user_id is null or discord_user_id = app_private.current_discord_user_id())
 );
 
 create policy "Room members can read rooms"
@@ -778,10 +794,11 @@ begin
     return new;
   end if;
 
-  insert into public.profiles (id, email, display_name, updated_at)
-  values (new.user_id, 'discord:' || new.provider_id, allowed_account.display_name, now())
+  insert into public.profiles (id, email, discord_user_id, display_name, updated_at)
+  values (new.user_id, 'discord:' || new.provider_id, new.provider_id, allowed_account.display_name, now())
   on conflict (id) do update
     set display_name = excluded.display_name,
+        discord_user_id = excluded.discord_user_id,
         updated_at = excluded.updated_at;
 
   select id

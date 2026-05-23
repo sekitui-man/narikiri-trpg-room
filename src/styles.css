@@ -491,6 +491,7 @@ select:focus {
 
 .modal-panel {
   width: min(100%, 760px);
+  min-height: min(86vh, 560px);
   max-height: min(86vh, 820px);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -527,12 +528,24 @@ select:focus {
 }
 
 .modal-tabs {
-  max-width: 360px;
+  width: 100%;
+  max-width: none;
 }
 
 .modal-body {
+  min-height: 300px;
   display: grid;
+  align-content: start;
   gap: 16px;
+}
+
+.permission-modal-body {
+  min-height: 180px;
+}
+
+.permission-grid {
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px);
+  align-items: end;
 }
 
 .tool-panel-header p {
@@ -1548,6 +1561,10 @@ select:focus {
 
   .field-grid.two,
   .field-grid.three {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-grid {
     grid-template-columns: 1fr;
   }
 

@@ -76,6 +76,7 @@ type RoomMember = {
   roomId: string;
   userId: string;
   displayName: string;
+  discordUserId?: string | null;
   role: AccessRole;
 };
 type RoomScenePermission = {
@@ -122,8 +123,8 @@ const skillCategories = getSkillCategories();
 const demoUserId = 'demo-user';
 const playerSpeakerId = 'speaker-player';
 const demoRoomMembers: RoomMember[] = [
-  { roomId: 'room-demo', userId: 'demo-guest', displayName: 'Guest', role: 'player' },
-  { roomId: 'room-demo', userId: 'demo-gm', displayName: 'GM', role: 'gm' },
+  { roomId: 'room-demo', userId: 'demo-guest', displayName: 'Guest', discordUserId: '000000000000000001', role: 'player' },
+  { roomId: 'room-demo', userId: 'demo-gm', displayName: 'GM', discordUserId: '000000000000000002', role: 'gm' },
 ];
 
 const defaultCharacteristics: CoCCharacteristics = {
@@ -1374,7 +1375,7 @@ export function App() {
                         >
                           {activeRoomMembers.map((member) => (
                             <option key={member.userId} value={member.userId}>
-                              {member.displayName} / {member.role}
+                              {formatRoomMemberLabel(member)}
                             </option>
                           ))}
                         </select>
@@ -1596,7 +1597,7 @@ export function App() {
                         >
                           {activeRoomMembers.map((member) => (
                             <option key={member.userId} value={member.userId}>
-                              {member.displayName} / {member.role}
+                              {formatRoomMemberLabel(member)}
                             </option>
                           ))}
                         </select>
@@ -1729,10 +1730,10 @@ export function App() {
                     </div>
                   </form>
                 ) : (
-                  <div className="modal-body">
-                    <div className="field-grid two">
+                  <div className="modal-body permission-modal-body">
+                    <div className="field-grid permission-grid">
                       <label>
-                        編集を許可するユーザ
+                        編集を許可するDiscordアカウント
                         <select
                           value={selectedSceneEditorUserId}
                           onChange={(event) => setSelectedSceneEditorUserId(event.target.value)}
@@ -1740,7 +1741,7 @@ export function App() {
                         >
                           {activeRoomMembers.map((member) => (
                             <option key={member.userId} value={member.userId}>
-                              {member.displayName} / {member.role}
+                              {formatRoomMemberLabel(member)}
                             </option>
                           ))}
                         </select>
@@ -1787,6 +1788,7 @@ export function App() {
                   )}
                   <div>
                     <span>Discord</span>
+                    <span className="access-chip">連携済み</span>
                     <strong>{discordProfile.displayName}</strong>
                     <small>{discordProfile.username}</small>
                     {discordProfile.id && <small>ID: {discordProfile.id}</small>}
@@ -2519,15 +2521,30 @@ function rowToRoomMember(row: {
   room_id: string;
   user_id: string;
   role?: string | null;
-  profiles?: { display_name?: string | null; email?: string | null } | Array<{ display_name?: string | null; email?: string | null }> | null;
+  profiles?:
+    | { display_name?: string | null; email?: string | null; discord_user_id?: string | null }
+    | Array<{ display_name?: string | null; email?: string | null; discord_user_id?: string | null }>
+    | null;
 }): RoomMember {
   const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  const discordUserId = profile?.discord_user_id ?? parseDiscordUserIdFromProfileKey(profile?.email);
   return {
     roomId: row.room_id,
     userId: row.user_id,
     displayName: profile?.display_name ?? profile?.email ?? 'Unknown',
+    discordUserId,
     role: isAccessRole(row.role) ? row.role : 'player',
   };
+}
+
+function parseDiscordUserIdFromProfileKey(profileKey?: string | null) {
+  const match = profileKey?.match(/^discord:(\d{17,20})$/);
+  return match?.[1] ?? null;
+}
+
+function formatRoomMemberLabel(member: RoomMember) {
+  const discordLabel = member.discordUserId ? `Discord ${member.discordUserId}` : 'Discord未連携';
+  return `${member.displayName} / ${discordLabel} / ${member.role}`;
 }
 
 function rowToRoomScenePermission(row: {
