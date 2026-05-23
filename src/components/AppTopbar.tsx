@@ -43,7 +43,11 @@ export function AppTopbar({
             ルーム
           </button>
           <button
-            className={currentView === 'my-page' ? 'topbar-tab active' : 'topbar-tab'}
+            className={
+              currentView === 'my-page' || currentView === 'characters' || currentView === 'character-new'
+                ? 'topbar-tab active'
+                : 'topbar-tab'
+            }
             type="button"
             onClick={onMyPage}
           >

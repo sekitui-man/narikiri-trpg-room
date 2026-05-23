@@ -789,6 +789,66 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.my-page-menu {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.my-page-menu .discord-profile-card {
+  margin-bottom: 0;
+}
+
+.menu-card-button {
+  min-height: 96px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--surface);
+  color: var(--primary);
+  text-align: left;
+}
+
+.menu-card-button:hover,
+.menu-card-button:focus-visible {
+  border-color: var(--primary);
+  background: var(--neutral);
+}
+
+.menu-card-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface);
+}
+
+.menu-card-button span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.menu-card-button strong {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.menu-card-button small {
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
 .owner-invite-card {
   display: grid;
   gap: 12px;
@@ -1398,6 +1458,10 @@ select:focus {
   }
 
   .character-manager {
+    grid-template-columns: 1fr;
+  }
+
+  .my-page-menu {
     grid-template-columns: 1fr;
   }
 

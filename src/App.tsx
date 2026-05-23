@@ -1,8 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
-  Archive,
   BookOpen,
   Check,
   ChevronDown,
@@ -22,14 +20,7 @@ import {
 } from 'lucide-react';
 import type { AccessRole, AuthState, ViewMode } from './appTypes';
 import { isSupabaseConfigured, supabase } from './supabase';
-import {
-  cocSkillDefinitions,
-  createSkillMap,
-  getSkillCategories,
-  getSkillTotal,
-  normalizeSkillEntry,
-  resolveSkillBase,
-} from './cocSkills';
+import { createDefaultCharacter, deriveCoCValues, normalizeCharacter } from './characterModel';
 import {
   archiveCharacterApi,
   createCharacterApi,
@@ -49,8 +40,9 @@ import {
   updateSceneApi,
 } from './roomApi';
 import { AppTopbar } from './components/AppTopbar';
+import { CharacterEditor } from './components/CharacterEditor';
 import { demoCharacters, demoMessages, demoRooms, demoScenes } from './demoData';
-import type { Character, CoCBackground, CoCCharacteristics, CoCSkillEntry, CoCSkillMap, Room, RpMessage, Scene } from './types';
+import type { Character, Room, RpMessage, Scene } from './types';
 
 type RoomSettingsTab = 'basic' | 'permissions';
 type SceneSettingsTab = 'basic' | 'permissions';
@@ -91,62 +83,16 @@ type DiscordProfile = {
   displayName: string;
   avatarUrl: string | null;
 };
-type CharacterLike = Omit<Partial<Character>, 'characteristics' | 'skills' | 'background'> & {
-  id: string;
-  name?: string;
-  characteristics?: unknown;
-  skills?: unknown;
-  background?: unknown;
-};
 type SceneDraft = Pick<Scene, 'id' | 'title' | 'summary' | 'status' | 'locationName' | 'timeLabel' | 'mapX' | 'mapY' | 'tags' | 'createdBy' | 'roomId' | 'createdAt'>;
-type DerivedCoCValues = ReturnType<typeof deriveCoCValues>;
 
 const authRedirectUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim();
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const characteristicKeys: Array<keyof CoCCharacteristics> = ['str', 'con', 'siz', 'int', 'pow', 'dex', 'app', 'edu'];
-const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
-  { key: 'description', label: '外見・描写' },
-  { key: 'ideology', label: '思想・信条' },
-  { key: 'significantPeople', label: '重要な人物' },
-  { key: 'meaningfulLocations', label: '意味のある場所' },
-  { key: 'treasuredPossessions', label: '秘蔵品' },
-  { key: 'traits', label: '特徴' },
-  { key: 'injuries', label: '負傷・傷跡' },
-  { key: 'phobias', label: '恐怖症・マニア' },
-  { key: 'tomes', label: '魔導書・呪文' },
-  { key: 'encounters', label: '遭遇した神話存在' },
-];
-const skillCategories = getSkillCategories();
 const demoUserId = 'demo-user';
 const playerSpeakerId = 'speaker-player';
 const demoRoomMembers: RoomMember[] = [
   { roomId: 'room-demo', userId: 'demo-guest', displayName: 'Guest', discordUserId: '000000000000000001', role: 'player' },
   { roomId: 'room-demo', userId: 'demo-gm', displayName: 'GM', discordUserId: '000000000000000002', role: 'gm' },
 ];
-
-const defaultCharacteristics: CoCCharacteristics = {
-  str: 10,
-  con: 10,
-  siz: 10,
-  int: 10,
-  pow: 10,
-  dex: 10,
-  app: 10,
-  edu: 10,
-};
-
-const defaultBackground: CoCBackground = {
-  description: '',
-  ideology: '',
-  significantPeople: '',
-  meaningfulLocations: '',
-  treasuredPossessions: '',
-  traits: '',
-  injuries: '',
-  phobias: '',
-  tomes: '',
-  encounters: '',
-};
 
 const emptyRoom: Room = {
   id: '',
@@ -279,9 +225,10 @@ export function App() {
   );
 
   useEffect(() => {
+    if (currentView === 'character-new') return;
     if (!activeCharacter) return;
     setCharacterDraft(activeCharacter);
-  }, [activeCharacter?.id]);
+  }, [activeCharacter?.id, currentView]);
 
   useEffect(() => {
     if (!activeRoom) return;
@@ -695,16 +642,26 @@ export function App() {
     return Boolean(activeActorId && message.authorId === activeActorId);
   }
 
-  async function handleCreateCharacter() {
+  function handleStartNewCharacter() {
     const nextCharacter = createDefaultCharacter(currentUserId);
-    setCurrentView('my-page');
+    setSelectedCharacterId('');
+    setCharacterDraft(nextCharacter);
+    setCurrentView('character-new');
+  }
 
-    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && currentUserId) {
+  async function handleSaveCharacter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextCharacter = normalizeCharacter(characterDraft);
+    const existingCharacter = characters.some((character) => character.id === nextCharacter.id);
+
+    if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && currentUserId && !existingCharacter) {
       try {
         const data = await createCharacterApi(selectedRoomId, nextCharacter);
         const created = rowToCharacter(data);
         setCharacters((current) => [...current, created]);
         setSelectedCharacterId(created.id);
+        setCharacterDraft(created);
+        setCurrentView('characters');
         showToast('探索者を作成しました。');
         return;
       } catch (error) {
@@ -713,20 +670,13 @@ export function App() {
       }
     }
 
-    setCharacters((current) => [...current, nextCharacter]);
-    setSelectedCharacterId(nextCharacter.id);
-  }
-
-  async function handleSaveCharacter(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextCharacter = normalizeCharacter(characterDraft);
-
     if (supabase && authState === 'allowed' && selectedRoomIdIsUuid && isUuid(nextCharacter.id)) {
       try {
         const data = await updateCharacterApi(selectedRoomId, nextCharacter);
         const saved = rowToCharacter(data);
         setCharacters((current) => current.map((character) => (character.id === saved.id ? saved : character)));
         setCharacterDraft(saved);
+        setCurrentView('characters');
         showToast('探索者を保存しました。');
         return;
       } catch (error) {
@@ -736,9 +686,13 @@ export function App() {
     }
 
     setCharacters((current) =>
-      current.map((character) => (character.id === nextCharacter.id ? nextCharacter : character)),
+      existingCharacter
+        ? current.map((character) => (character.id === nextCharacter.id ? nextCharacter : character))
+        : [...current, nextCharacter],
     );
+    setSelectedCharacterId(nextCharacter.id);
     setCharacterDraft(nextCharacter);
+    setCurrentView('characters');
   }
 
   async function handleArchiveCharacter() {
@@ -1928,65 +1882,129 @@ export function App() {
           <div className="my-page-header">
             <div>
               <p>My Page</p>
-              <h1>キャラクター管理</h1>
+              <h1>マイページ</h1>
             </div>
-            <button className="button-primary" type="button" onClick={handleCreateCharacter}>
-              <Plus size={16} />
-              新規キャラ作成
+          </div>
+
+          <div className="my-page-menu">
+            {discordProfile && (
+              <section className="discord-profile-card" aria-label="Discordプロフィール">
+                {discordProfile.avatarUrl ? (
+                  <img src={discordProfile.avatarUrl} alt="" />
+                ) : (
+                  <span className="discord-avatar-fallback">
+                    <MessageCircle size={18} />
+                  </span>
+                )}
+                <div>
+                  <span>Discord</span>
+                  <span className="access-chip">連携済み</span>
+                  <strong>{discordProfile.displayName}</strong>
+                  <small>{discordProfile.username}</small>
+                  {discordProfile.id && <small>ID: {discordProfile.id}</small>}
+                </div>
+              </section>
+            )}
+            <button className="menu-card-button" type="button" onClick={() => setCurrentView('characters')}>
+              <span className="menu-card-icon">
+                <UsersRound size={20} />
+              </span>
+              <span>
+                <strong>探索者</strong>
+                <small>{characters.length}件の探索者を管理</small>
+              </span>
             </button>
+          </div>
+        </section>
+      ) : currentView === 'characters' ? (
+        <section className="my-page" aria-label="探索者一覧">
+          <div className="my-page-header">
+            <div>
+              <p>Investigators</p>
+              <h1>探索者一覧</h1>
+            </div>
+            <div className="panel-actions">
+              <button className="button-secondary" type="button" onClick={() => setCurrentView('my-page')}>
+                <UserRound size={16} />
+                マイページ
+              </button>
+              <button className="icon-button" type="button" onClick={handleStartNewCharacter} aria-label="新規探索者">
+                <Plus size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="character-manager">
-            <aside className="character-manager-list" aria-label="キャラ一覧">
-              {discordProfile && (
-                <section className="discord-profile-card" aria-label="Discordプロフィール">
-                  {discordProfile.avatarUrl ? (
-                    <img src={discordProfile.avatarUrl} alt="" />
-                  ) : (
-                    <span className="discord-avatar-fallback">
-                      <MessageCircle size={18} />
-                    </span>
-                  )}
-                  <div>
-                    <span>Discord</span>
-                    <span className="access-chip">連携済み</span>
-                    <strong>{discordProfile.displayName}</strong>
-                    <small>{discordProfile.username}</small>
-                    {discordProfile.id && <small>ID: {discordProfile.id}</small>}
-                  </div>
-                </section>
-              )}
+            <aside className="character-manager-list" aria-label="探索者一覧">
               <div className="section-title">
                 <UsersRound size={16} />
-                キャラ一覧
+                探索者一覧
               </div>
               <div className="character-list">
-                {characters.map((character) => (
-                  <button
-                    className={character.id === selectedCharacterId ? 'character-item selected' : 'character-item'}
-                    key={character.id}
-                    type="button"
-                    onClick={() => setSelectedCharacterId(character.id)}
-                  >
-                    <span className="avatar" style={{ backgroundColor: character.color }} />
-                    <span>
-                      <strong>{character.name}</strong>
-                      <small>{character.archetype || '探索者'}</small>
-                    </span>
-                  </button>
-                ))}
+                {characters.length === 0 ? (
+                  <p className="empty-state">探索者はまだありません。右上のプラスマークから作成してください。</p>
+                ) : (
+                  characters.map((character) => (
+                    <button
+                      className={character.id === selectedCharacterId ? 'character-item selected' : 'character-item'}
+                      key={character.id}
+                      type="button"
+                      onClick={() => setSelectedCharacterId(character.id)}
+                    >
+                      <span className="avatar" style={{ backgroundColor: character.color }} />
+                      <span>
+                        <strong>{character.name}</strong>
+                        <small>{character.archetype || '探索者'}</small>
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </aside>
-            <CharacterEditor
-              activeDerived={activeDerived}
-              canManageActiveCharacter={canManageActiveCharacter}
-              characterDraft={characterDraft}
-              currentUserId={currentUserId}
-              onArchive={handleArchiveCharacter}
-              onSave={handleSaveCharacter}
-              setCharacterDraft={setCharacterDraft}
-            />
+            {characters.length > 0 ? (
+              <CharacterEditor
+                activeDerived={activeDerived}
+                canArchiveCharacter
+                canManageActiveCharacter={canManageActiveCharacter}
+                characterDraft={characterDraft}
+                currentUserId={currentUserId}
+                onArchive={handleArchiveCharacter}
+                onSave={handleSaveCharacter}
+                setCharacterDraft={setCharacterDraft}
+              />
+            ) : (
+              <section className="tool-panel empty-character-panel" aria-label="探索者未作成">
+                <div className="section-title">
+                  <UserRound size={16} />
+                  未選択
+                </div>
+                <p className="empty-state">プラスマークから新規探索者画面へ進んでください。</p>
+              </section>
+            )}
           </div>
+        </section>
+      ) : currentView === 'character-new' ? (
+        <section className="my-page" aria-label="新規探索者">
+          <div className="my-page-header">
+            <div>
+              <p>New Investigator</p>
+              <h1>新規探索者</h1>
+            </div>
+            <button className="button-secondary" type="button" onClick={() => setCurrentView('characters')}>
+              <UsersRound size={16} />
+              探索者一覧
+            </button>
+          </div>
+          <CharacterEditor
+            activeDerived={activeDerived}
+            canArchiveCharacter={false}
+            canManageActiveCharacter={canManageActiveCharacter}
+            characterDraft={characterDraft}
+            currentUserId={currentUserId}
+            onArchive={handleArchiveCharacter}
+            onSave={handleSaveCharacter}
+            setCharacterDraft={setCharacterDraft}
+          />
         </section>
       ) : (
       <div className={isRoomNavOpen ? 'workspace' : 'workspace nav-collapsed'}>
@@ -2182,311 +2200,6 @@ export function App() {
   );
 }
 
-function CharacterEditor({
-  activeDerived,
-  canManageActiveCharacter,
-  characterDraft,
-  currentUserId,
-  onArchive,
-  onSave,
-  setCharacterDraft,
-}: {
-  activeDerived: DerivedCoCValues;
-  canManageActiveCharacter: boolean;
-  characterDraft: Character;
-  currentUserId: string | null;
-  onArchive: () => void;
-  onSave: (event: FormEvent<HTMLFormElement>) => void;
-  setCharacterDraft: Dispatch<SetStateAction<Character>>;
-}) {
-  const occupationBudget = characterDraft.characteristics.edu * 20;
-  const interestBudget = characterDraft.characteristics.int * 10;
-  const occupationUsed = Object.values(characterDraft.skills).reduce((sum, skill) => sum + skill.occupation, 0);
-  const interestUsed = Object.values(characterDraft.skills).reduce((sum, skill) => sum + skill.interest, 0);
-
-  function updateSkill(name: string, field: keyof Omit<CoCSkillEntry, 'base'>, value: number) {
-    setCharacterDraft((current) => {
-      const definition = cocSkillDefinitions.find((skill) => skill.name === name);
-      const base = definition ? resolveSkillBase(definition.base, current.characteristics) : 0;
-      const currentEntry = current.skills[name] ?? normalizeSkillEntry(undefined, base);
-      return {
-        ...current,
-        skills: {
-          ...current.skills,
-          [name]: {
-            ...currentEntry,
-            base,
-            [field]: clampSkillPoint(value),
-          },
-        },
-      };
-    });
-  }
-
-  return (
-    <form className="character-editor character-editor-page" onSubmit={onSave}>
-      <div className="editor-heading">
-        <div>
-          <p>Character Sheet</p>
-          <h2>{characterDraft.name}</h2>
-        </div>
-        <span className="access-chip">{characterDraft.ownerId === currentUserId ? 'MY PC' : 'ROOM PC'}</span>
-      </div>
-
-      <div className="field-grid two">
-        <label>
-          名前
-          <input
-            value={characterDraft.name}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          プレイヤー
-          <input
-            value={characterDraft.player}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, player: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          職業
-          <input
-            value={characterDraft.occupation}
-            onChange={(event) =>
-              setCharacterDraft({
-                ...characterDraft,
-                occupation: event.target.value,
-                archetype: event.target.value || characterDraft.archetype,
-              })
-            }
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          年齢
-          <input
-            value={characterDraft.age}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, age: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          性別
-          <input
-            value={characterDraft.gender}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, gender: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          色
-          <input
-            value={characterDraft.color}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, color: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          住所
-          <input
-            value={characterDraft.residence}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, residence: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          出身
-          <input
-            value={characterDraft.birthplace}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, birthplace: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-      </div>
-
-      <section className="editor-section">
-        <h3>Characteristics</h3>
-        <div className="stat-grid">
-          {characteristicKeys.map((key) => (
-            <label key={key}>
-              {key.toUpperCase()}
-              <input
-                type="number"
-                min="0"
-                max="99"
-                value={characterDraft.characteristics[key]}
-                onChange={(event) =>
-                  setCharacterDraft({
-                    ...characterDraft,
-                    characteristics: {
-                      ...characterDraft.characteristics,
-                      [key]: Number(event.target.value),
-                    },
-                  })
-                }
-                disabled={!canManageActiveCharacter}
-              />
-            </label>
-          ))}
-        </div>
-        <div className="derived-grid">
-          <span>Idea {activeDerived.idea}</span>
-          <span>Luck {activeDerived.luck}</span>
-          <span>Know {activeDerived.know}</span>
-          <span>SAN Max {activeDerived.sanityMax}</span>
-        </div>
-      </section>
-
-      <section className="editor-section">
-        <h3>Status</h3>
-        <div className="field-grid three">
-          <label>
-            SAN
-            <input
-              type="number"
-              value={characterDraft.sanityCurrent}
-              onChange={(event) => setCharacterDraft({ ...characterDraft, sanityCurrent: Number(event.target.value) })}
-              disabled={!canManageActiveCharacter}
-            />
-          </label>
-          <label>
-            HP / {activeDerived.hitPointsMax}
-            <input
-              type="number"
-              value={characterDraft.hitPointsCurrent}
-              onChange={(event) =>
-                setCharacterDraft({ ...characterDraft, hitPointsCurrent: Number(event.target.value) })
-              }
-              disabled={!canManageActiveCharacter}
-            />
-          </label>
-          <label>
-            MP / {activeDerived.magicPointsMax}
-            <input
-              type="number"
-              value={characterDraft.magicPointsCurrent}
-              onChange={(event) =>
-                setCharacterDraft({ ...characterDraft, magicPointsCurrent: Number(event.target.value) })
-              }
-              disabled={!canManageActiveCharacter}
-            />
-          </label>
-        </div>
-      </section>
-
-      <section className="editor-section">
-        <h3>Skills</h3>
-        <div className="point-ledger">
-          <span>職業 {occupationUsed} / {occupationBudget}</span>
-          <span>興味 {interestUsed} / {interestBudget}</span>
-        </div>
-        <div className="skill-table" role="table" aria-label="CoC 6th edition skills">
-          <div className="skill-row skill-head" role="row">
-            <span>技能</span>
-            <span>初期</span>
-            <span>職業</span>
-            <span>興味</span>
-            <span>成長</span>
-            <span>他</span>
-            <span>合計</span>
-          </div>
-          {skillCategories.map((category) => (
-            <div className="skill-category" key={category}>
-              <div className="skill-category-title">{category}</div>
-              {cocSkillDefinitions
-                .filter((definition) => definition.category === category)
-                .map((definition) => {
-                  const base = resolveSkillBase(definition.base, characterDraft.characteristics);
-                  const entry = characterDraft.skills[definition.name] ?? normalizeSkillEntry(undefined, base);
-                  const normalizedEntry = entry.base === base ? entry : { ...entry, base };
-                  return (
-                    <div className="skill-row" role="row" key={definition.name}>
-                      <span>{definition.name}</span>
-                      <span>{base}</span>
-                      {(['occupation', 'interest', 'growth', 'other'] as const).map((field) => (
-                        <input
-                          key={field}
-                          type="number"
-                          min="0"
-                          max="999"
-                          value={normalizedEntry[field]}
-                          onChange={(event) => updateSkill(definition.name, field, Number(event.target.value))}
-                          disabled={!canManageActiveCharacter}
-                          aria-label={`${definition.name} ${field}`}
-                        />
-                      ))}
-                      <strong>{getSkillTotal(normalizedEntry)}</strong>
-                    </div>
-                  );
-                })}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="editor-section">
-        <h3>Equipment</h3>
-        <label>
-          武器
-          <textarea
-            value={characterDraft.weapons}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, weapons: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-        <label>
-          所持品
-          <textarea
-            value={characterDraft.possessions}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, possessions: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-      </section>
-
-      <section className="editor-section">
-        <h3>Background</h3>
-        {backgroundFields.map((field) => (
-          <label key={field.key}>
-            {field.label}
-            <textarea
-              value={characterDraft.background[field.key]}
-              onChange={(event) =>
-                setCharacterDraft({
-                  ...characterDraft,
-                  background: { ...characterDraft.background, [field.key]: event.target.value },
-                })
-              }
-              disabled={!canManageActiveCharacter}
-            />
-          </label>
-        ))}
-        <label>
-          メモ
-          <textarea
-            value={characterDraft.memo}
-            onChange={(event) => setCharacterDraft({ ...characterDraft, memo: event.target.value })}
-            disabled={!canManageActiveCharacter}
-          />
-        </label>
-      </section>
-
-      <div className="editor-actions">
-        <button className="button-primary" type="submit" disabled={!canManageActiveCharacter}>
-          <Save size={16} />
-          保存
-        </button>
-        <button className="button-secondary" type="button" onClick={onArchive} disabled={!canManageActiveCharacter}>
-          <Archive size={16} />
-          アーカイブ
-        </button>
-      </div>
-    </form>
-  );
-}
-
 function CinematicStrip() {
   return (
     <svg className="cinematic-strip" viewBox="0 0 520 120" role="img" aria-label="酒場のモノクロバナー">
@@ -2678,61 +2391,6 @@ function rowToCharacter(character: CharacterRow): Character {
   });
 }
 
-function normalizeCharacter(character: CharacterLike): Character {
-  const characteristicsInput =
-    character.characteristics && typeof character.characteristics === 'object' && !Array.isArray(character.characteristics)
-      ? (character.characteristics as Partial<CoCCharacteristics>)
-      : {};
-  const backgroundInput =
-    character.background && typeof character.background === 'object' && !Array.isArray(character.background)
-      ? (character.background as Partial<CoCBackground>)
-      : {};
-  const characteristics = { ...defaultCharacteristics, ...characteristicsInput };
-  const skills = normalizeSkills(character.skills, characteristics);
-  const sanityDefault = characteristics.pow * 5;
-  const hitPointDefault = Math.ceil((characteristics.con + characteristics.siz) / 2);
-
-  return {
-    id: character.id,
-    name: character.name ?? '新規探索者',
-    ownerId: character.ownerId ?? null,
-    player: character.player ?? '',
-    archetype: character.archetype ?? character.occupation ?? '',
-    color: character.color ?? '#090909',
-    memo: character.memo ?? '',
-    occupation: character.occupation ?? character.archetype ?? '',
-    age: character.age ?? '',
-    gender: character.gender ?? '',
-    residence: character.residence ?? '',
-    birthplace: character.birthplace ?? '',
-    characteristics,
-    skills,
-    weapons: character.weapons ?? '',
-    possessions: character.possessions ?? '',
-    background: { ...defaultBackground, ...backgroundInput },
-    sanityCurrent: Number(character.sanityCurrent ?? sanityDefault),
-    hitPointsCurrent: Number(character.hitPointsCurrent ?? hitPointDefault),
-    magicPointsCurrent: Number(character.magicPointsCurrent ?? characteristics.pow),
-    isArchived: Boolean(character.isArchived),
-  };
-}
-
-function createDefaultCharacter(ownerId: string | null): Character {
-  const id = crypto.randomUUID();
-  const characteristics = { ...defaultCharacteristics };
-  return normalizeCharacter({
-    id,
-    ownerId,
-    name: '新規探索者',
-    player: '',
-    archetype: '探索者',
-    color: '#090909',
-    occupation: '',
-    characteristics,
-    skills: createSkillMap(characteristics),
-  });
-}
-
 function createDefaultScene(roomId: string | null, creatorId: string | null): Scene {
   return normalizeScene({
     id: crypto.randomUUID(),
@@ -2765,35 +2423,6 @@ function normalizeScene(scene: SceneDraft): Scene {
     tags: normalizeTags(scene.tags),
     createdAt: scene.createdAt ?? null,
   };
-}
-
-function deriveCoCValues(character: Character) {
-  const { con, siz, int, pow, edu } = character.characteristics;
-  const cthulhuMythos = getSkillTotal(character.skills['クトゥルフ神話']);
-
-  return {
-    idea: int * 5,
-    luck: pow * 5,
-    know: edu * 5,
-    sanityMax: Math.max(0, 99 - cthulhuMythos),
-    hitPointsMax: Math.ceil((con + siz) / 2),
-    magicPointsMax: pow,
-  };
-}
-
-function normalizeSkills(skills: unknown, characteristics: CoCCharacteristics): CoCSkillMap {
-  const input = skills && typeof skills === 'object' && !Array.isArray(skills) ? (skills as Record<string, unknown>) : {};
-  return Object.fromEntries(
-    cocSkillDefinitions.map((definition) => {
-      const base = resolveSkillBase(definition.base, characteristics);
-      return [definition.name, normalizeSkillEntry(input[definition.name], base)];
-    }),
-  );
-}
-
-function clampSkillPoint(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(999, Math.max(0, Math.trunc(value)));
 }
 
 function parseTags(value: string) {
