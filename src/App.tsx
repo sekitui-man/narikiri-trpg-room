@@ -66,6 +66,7 @@ type AllowedMember = {
 type AllowedAccount = {
   discordUserId: string;
   displayName: string;
+  avatarUrl: string | null;
   role: AccessRole;
   isActive: boolean;
 };
@@ -212,8 +213,8 @@ export function App() {
     role: 'player' as AccessRole,
   });
   const [allowedAccounts, setAllowedAccounts] = useState<AllowedAccount[]>([]);
-  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [editingAccountDraft, setEditingAccountDraft] = useState<{ role: AccessRole; isActive: boolean } | null>(null);
+  const [selectedAdminAccountId, setSelectedAdminAccountId] = useState<string | null>(null);
+  const [adminDetailDraft, setAdminDetailDraft] = useState<{ role: AccessRole; isActive: boolean } | null>(null);
 
   useEffect(() => {
     if (!supabase) return;
@@ -391,9 +392,11 @@ export function App() {
     setCurrentUserId(user.id);
     const allowedMember = await checkAllowed(discordUserId);
     setCurrentAccessRole(allowedMember?.role ?? null);
-    const discordDisplayName = getDiscordProfile(user)?.displayName ?? null;
-    if (allowedMember) await ensureMemberBootstrap(user.id, profileKey, allowedMember, discordDisplayName);
-    if (allowedMember) await loadRoomData(user.id, profileKey, allowedMember, discordDisplayName);
+    const dp = getDiscordProfile(user);
+    const discordDisplayName = dp?.displayName ?? null;
+    const discordAvatarUrl = dp?.avatarUrl ?? null;
+    if (allowedMember) await ensureMemberBootstrap(user.id, profileKey, allowedMember, discordDisplayName, discordAvatarUrl);
+    if (allowedMember) await loadRoomData(user.id, profileKey, allowedMember, discordDisplayName, discordAvatarUrl);
     setAuthState(allowedMember ? 'allowed' : 'blocked');
   }
 
@@ -420,24 +423,26 @@ export function App() {
     } as AllowedMember;
   }
 
-  async function ensureMemberBootstrap(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null) {
+  async function ensureMemberBootstrap(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null, discordAvatarUrl: string | null) {
     if (!supabase) return;
 
     await supabase.from('profiles').upsert({
       id: userId,
       email: profileKey,
       display_name: discordDisplayName ?? allowedMember.display_name,
+      avatar_url: discordAvatarUrl,
       updated_at: new Date().toISOString(),
     });
   }
 
-  async function loadRoomData(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null) {
+  async function loadRoomData(userId: string, profileKey: string, allowedMember: AllowedMember, discordDisplayName: string | null, discordAvatarUrl: string | null) {
     if (!supabase) return;
 
     await supabase.from('profiles').upsert({
       id: userId,
       email: profileKey,
       display_name: discordDisplayName ?? allowedMember.display_name,
+      avatar_url: discordAvatarUrl,
       updated_at: new Date().toISOString(),
     });
 
@@ -1054,48 +1059,60 @@ export function App() {
     setAllowedAccounts((current) => {
       const exists = current.some((a) => a.discordUserId === discordUserId);
       if (exists) return current.map((a) => a.discordUserId === discordUserId ? { ...a, role: allowedDiscordDraft.role, isActive: true } : a);
-      return [...current, { discordUserId, displayName: '(pending)', role: allowedDiscordDraft.role, isActive: true }];
+      return [...current, { discordUserId, displayName: '(pending)', avatarUrl: null, role: allowedDiscordDraft.role, isActive: true }];
     });
     showToast('Discordアカウントを許可リストに追加しました。');
   }
 
   async function loadAllowedAccounts() {
     if (!supabase || currentAccessRole !== 'owner') return;
-    const { data, error } = await supabase
-      .from('allowed_discord_accounts')
-      .select('discord_user_id, display_name, role, is_active')
-      .order('created_at', { ascending: true });
+    const [{ data: accounts, error }, { data: profiles }] = await Promise.all([
+      supabase.from('allowed_discord_accounts').select('discord_user_id, display_name, role, is_active').order('created_at', { ascending: true }),
+      supabase.from('profiles').select('discord_user_id, display_name, avatar_url').not('discord_user_id', 'is', null),
+    ]);
     if (error) { showToast(error.message, 'error'); return; }
-    setAllowedAccounts((data ?? []).map((row) => ({
-      discordUserId: row.discord_user_id,
-      displayName: row.display_name,
-      role: row.role as AccessRole,
-      isActive: row.is_active,
-    })));
+    const profileMap = new Map((profiles ?? []).map((p) => [p.discord_user_id, p]));
+    setAllowedAccounts((accounts ?? []).map((row) => {
+      const profile = profileMap.get(row.discord_user_id);
+      return {
+        discordUserId: row.discord_user_id,
+        displayName: profile?.display_name ?? row.display_name,
+        avatarUrl: profile?.avatar_url ?? null,
+        role: row.role as AccessRole,
+        isActive: row.is_active,
+      };
+    }));
   }
 
-  function startEditAccount(account: AllowedAccount) {
-    setEditingAccountId(account.discordUserId);
-    setEditingAccountDraft({ role: account.role, isActive: account.isActive });
+  function selectAdminAccount(account: AllowedAccount) {
+    setSelectedAdminAccountId(account.discordUserId);
+    setAdminDetailDraft({ role: account.role, isActive: account.isActive });
   }
 
-  function cancelEditAccount() {
-    setEditingAccountId(null);
-    setEditingAccountDraft(null);
-  }
-
-  async function saveEditAccount(discordUserId: string) {
-    if (!supabase || !editingAccountDraft) return;
+  async function saveAdminAccount() {
+    if (!supabase || !selectedAdminAccountId || !adminDetailDraft) return;
     const { error } = await supabase
       .from('allowed_discord_accounts')
-      .update({ role: editingAccountDraft.role, is_active: editingAccountDraft.isActive })
-      .eq('discord_user_id', discordUserId);
+      .update({ role: adminDetailDraft.role, is_active: adminDetailDraft.isActive })
+      .eq('discord_user_id', selectedAdminAccountId);
     if (error) { showToast(error.message, 'error'); return; }
     setAllowedAccounts((current) =>
-      current.map((a) => a.discordUserId === discordUserId ? { ...a, ...editingAccountDraft } : a),
+      current.map((a) => a.discordUserId === selectedAdminAccountId ? { ...a, ...adminDetailDraft } : a),
     );
-    cancelEditAccount();
     showToast('ユーザ設定を保存しました。');
+  }
+
+  async function deleteAdminAccount(discordUserId: string) {
+    if (!supabase) return;
+    if (!window.confirm('このユーザを許可リストから削除しますか？')) return;
+    const { error } = await supabase.from('allowed_discord_accounts').delete().eq('discord_user_id', discordUserId);
+    if (error) { showToast(error.message, 'error'); return; }
+    setAllowedAccounts((current) => current.filter((a) => a.discordUserId !== discordUserId));
+    if (selectedAdminAccountId === discordUserId) {
+      setSelectedAdminAccountId(null);
+      setAdminDetailDraft(null);
+    }
+    showToast('ユーザを削除しました。');
   }
 
   if (authState === 'checking') {
@@ -1826,57 +1843,88 @@ export function App() {
               ) : (
                 <div className="admin-user-list">
                   {allowedAccounts.map((account) => {
-                    const isEditing = editingAccountId === account.discordUserId;
+                    const isSelected = selectedAdminAccountId === account.discordUserId;
                     return (
-                      <article key={account.discordUserId} className={`admin-user-card${!account.isActive ? ' inactive' : ''}`}>
-                        <div className="admin-user-info">
-                          <strong>{account.displayName}</strong>
-                          <small>ID: {account.discordUserId}</small>
-                        </div>
-                        {isEditing && editingAccountDraft ? (
-                          <div className="admin-user-edit">
-                            <select
-                              value={editingAccountDraft.role}
-                              onChange={(e) => setEditingAccountDraft({ ...editingAccountDraft, role: e.target.value as AccessRole })}
-                            >
-                              <option value="player">player</option>
-                              <option value="gm">gm</option>
-                              <option value="viewer">viewer</option>
-                              <option value="owner">owner</option>
-                            </select>
-                            <label className="admin-toggle">
-                              <input
-                                type="checkbox"
-                                checked={editingAccountDraft.isActive}
-                                onChange={(e) => setEditingAccountDraft({ ...editingAccountDraft, isActive: e.target.checked })}
-                              />
-                              有効
-                            </label>
-                            <div className="inline-actions">
-                              <button className="button-primary" type="button" onClick={() => void saveEditAccount(account.discordUserId)}>
-                                <Check size={14} />
-                                保存
-                              </button>
-                              <button className="button-secondary" type="button" onClick={cancelEditAccount}>
-                                <X size={14} />
-                              </button>
-                            </div>
-                          </div>
+                      <button
+                        key={account.discordUserId}
+                        type="button"
+                        className={`admin-user-row${isSelected ? ' selected' : ''}${!account.isActive ? ' inactive' : ''}`}
+                        onClick={() => selectAdminAccount(account)}
+                      >
+                        {account.avatarUrl ? (
+                          <img className="admin-avatar" src={account.avatarUrl} alt="" />
                         ) : (
-                          <div className="admin-user-meta">
-                            <span className="access-chip">{account.role}</span>
-                            {!account.isActive && <span className="access-chip muted-chip">無効</span>}
-                            <button className="mini-icon-button" type="button" onClick={() => startEditAccount(account)} aria-label="編集">
-                              <Pencil size={14} />
-                            </button>
-                          </div>
+                          <span className="admin-avatar admin-avatar-fallback">
+                            {account.displayName.charAt(0).toUpperCase()}
+                          </span>
                         )}
-                      </article>
+                        <span className="admin-user-row-info">
+                          <strong>{account.displayName}</strong>
+                          {!account.isActive && <small>停止中</small>}
+                        </span>
+                        <span className="access-chip">{account.role}</span>
+                      </button>
                     );
                   })}
                 </div>
               )}
             </section>
+
+            {selectedAdminAccountId && adminDetailDraft && (() => {
+              const account = allowedAccounts.find((a) => a.discordUserId === selectedAdminAccountId);
+              if (!account) return null;
+              return (
+                <section className="tool-panel admin-detail-panel" aria-label="ユーザ詳細">
+                  <div className="admin-detail-header">
+                    {account.avatarUrl ? (
+                      <img className="admin-avatar-large" src={account.avatarUrl} alt="" />
+                    ) : (
+                      <span className="admin-avatar-large admin-avatar-fallback">
+                        {account.displayName.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div>
+                      <strong>{account.displayName}</strong>
+                      <small>Discord ID: {account.discordUserId}</small>
+                    </div>
+                  </div>
+                  <div className="field-grid two">
+                    <label>
+                      権限
+                      <select
+                        value={adminDetailDraft.role}
+                        onChange={(e) => setAdminDetailDraft({ ...adminDetailDraft, role: e.target.value as AccessRole })}
+                      >
+                        <option value="player">player</option>
+                        <option value="gm">gm</option>
+                        <option value="viewer">viewer</option>
+                        <option value="owner">owner</option>
+                      </select>
+                    </label>
+                    <label>
+                      ステータス
+                      <select
+                        value={adminDetailDraft.isActive ? 'active' : 'suspended'}
+                        onChange={(e) => setAdminDetailDraft({ ...adminDetailDraft, isActive: e.target.value === 'active' })}
+                      >
+                        <option value="active">有効</option>
+                        <option value="suspended">停止</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="editor-actions compact">
+                    <button className="button-primary" type="button" onClick={() => void saveAdminAccount()}>
+                      <Save size={16} />
+                      保存
+                    </button>
+                    <button className="button-danger" type="button" onClick={() => void deleteAdminAccount(account.discordUserId)}>
+                      <Trash2 size={16} />
+                      削除
+                    </button>
+                  </div>
+                </section>
+              );
+            })()}
           </div>
         </section>
       ) : currentView === 'my-page' ? (

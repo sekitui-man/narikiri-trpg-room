@@ -51,6 +51,7 @@ create table if not exists public.rooms (
 );
 alter table public.rooms add column if not exists tags text[] not null default '{}';
 alter table public.rooms add column if not exists deleted_at timestamptz default null;
+alter table public.profiles add column if not exists avatar_url text;
 
 create table if not exists public.room_members (
   room_id uuid not null references public.rooms(id) on delete cascade,
