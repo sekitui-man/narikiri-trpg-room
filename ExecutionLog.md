@@ -57,3 +57,4 @@
 - Removed non-I-A Character fixed background fields from the investigator editor, added custom memo sections, and mapped bracketed I-A Character memo blocks such as `[性格]` into those sections; verified `npm run build`.
 - Fixed investigator editor cancel behavior so existing edits show discard feedback and new investigator creation returns to the investigator list; verified `npm run build`.
 - Replaced free-text investigator weapon and possession fields with column-based input grids, removed the visible appearance memo field, and restarted local preview on port 5174 after `npm run build`.
+- Made investigator weapon and possession grids individually collapsible, defaulting populated grids open and empty grids closed; verified `npm run build` and restarted local preview on port 5174.

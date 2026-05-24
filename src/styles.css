@@ -1483,6 +1483,52 @@ select:focus {
   gap: 10px;
 }
 
+.equipment-accordion {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.equipment-accordion-toggle {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.equipment-accordion-toggle:hover,
+.equipment-accordion-toggle:focus-visible {
+  background: var(--neutral);
+}
+
+.equipment-accordion-toggle svg {
+  flex: 0 0 auto;
+  transition: transform 0.16s ease;
+}
+
+.equipment-accordion-toggle.open svg {
+  transform: rotate(180deg);
+}
+
+.equipment-accordion-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
 .equipment-editor-title {
   color: var(--secondary);
   font-size: 12px;

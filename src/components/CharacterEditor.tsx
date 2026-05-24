@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react';
-import { Archive, Image as ImageIcon, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
+import type { ChangeEvent, Dispatch, FormEvent, ReactNode, SetStateAction } from 'react';
+import { Archive, ChevronDown, Image as ImageIcon, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import {
   cocSkillDefinitions,
   getSkillCategories,
@@ -337,23 +337,31 @@ export function CharacterEditor({
         <h3>Equipment</h3>
         {isEditing ? (
           <>
-            <EditableEquipmentTable
-              columns={weaponColumns}
-              label="武器"
-              value={characterDraft.weapons}
-              onChange={(value) => setCharacterDraft({ ...characterDraft, weapons: value })}
-            />
-            <EditableEquipmentTable
-              columns={possessionColumns}
-              label="所持品"
-              value={characterDraft.possessions}
-              onChange={(value) => setCharacterDraft({ ...characterDraft, possessions: value })}
-            />
+            <EquipmentAccordion defaultOpen={Boolean(characterDraft.weapons.trim())} label="武器">
+              <EditableEquipmentTable
+                columns={weaponColumns}
+                label="武器"
+                value={characterDraft.weapons}
+                onChange={(value) => setCharacterDraft({ ...characterDraft, weapons: value })}
+              />
+            </EquipmentAccordion>
+            <EquipmentAccordion defaultOpen={Boolean(characterDraft.possessions.trim())} label="所持品">
+              <EditableEquipmentTable
+                columns={possessionColumns}
+                label="所持品"
+                value={characterDraft.possessions}
+                onChange={(value) => setCharacterDraft({ ...characterDraft, possessions: value })}
+              />
+            </EquipmentAccordion>
           </>
         ) : (
           <>
-            <ReadEquipmentTable columns={weaponColumns} label="武器" value={characterDraft.weapons} />
-            <ReadEquipmentTable columns={possessionColumns} label="所持品" value={characterDraft.possessions} />
+            <EquipmentAccordion defaultOpen={Boolean(characterDraft.weapons.trim())} label="武器">
+              <ReadEquipmentTable columns={weaponColumns} label="武器" value={characterDraft.weapons} />
+            </EquipmentAccordion>
+            <EquipmentAccordion defaultOpen={Boolean(characterDraft.possessions.trim())} label="所持品">
+              <ReadEquipmentTable columns={possessionColumns} label="所持品" value={characterDraft.possessions} />
+            </EquipmentAccordion>
           </>
         )}
       </section>
@@ -463,6 +471,33 @@ function EditableTextarea({ label, value, onChange }: { label: string; value: st
       {label}
       <textarea value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function EquipmentAccordion({
+  children,
+  defaultOpen,
+  label,
+}: {
+  children: ReactNode;
+  defaultOpen: boolean;
+  label: string;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <section className="equipment-accordion">
+      <button
+        className={isOpen ? 'equipment-accordion-toggle open' : 'equipment-accordion-toggle'}
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+      >
+        <span>{label}</span>
+        <ChevronDown size={16} />
+      </button>
+      {isOpen && <div className="equipment-accordion-body">{children}</div>}
+    </section>
   );
 }
 
