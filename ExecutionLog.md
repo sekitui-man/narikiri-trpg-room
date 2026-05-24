@@ -52,3 +52,4 @@
 - Changed existing investigator sheets to open in read-only mode with an explicit edit/cancel flow while keeping new investigator sheets editable by default; verified `npm run build` and local Browser interaction.
 - Reworked My Page into large menu cards for character management and profile editing, added profile display-name editing backed by `profiles.display_name`, and verified build plus Browser navigation.
 - Added Discord link preview metadata, split the character list panel out of `App.tsx`, and added text-file import for I-A Character CoC 6th edition exports.
+- Added a blurred modal backdrop, a plus-button investigator creation chooser, I-A Character-aligned profile fields, and Supabase Storage-backed character image upload; verified `npm run build`.
