@@ -24,7 +24,8 @@ type BackgroundKey =
   | 'injuries'
   | 'phobias'
   | 'tomes'
-  | 'encounters';
+  | 'encounters'
+  | 'customMemos';
 
 const characterColumns =
   'id, name, player_name, archetype, color, memo, owner_id, occupation, age, gender, height, weight, hair_color, eye_color, skin_color, residence, birthplace, image_path, tags, characteristics, skills, weapons, possessions, background, sanity_current, hit_points_current, magic_points_current, is_archived';
@@ -45,6 +46,7 @@ const backgroundKeys: BackgroundKey[] = [
   'phobias',
   'tomes',
   'encounters',
+  'customMemos',
 ];
 
 class ApiError extends Error {
@@ -282,9 +284,33 @@ function sanitizeSkills(value: unknown) {
   return output;
 }
 
-function sanitizeBackground(value: unknown) {
+function sanitizeBackground(value: unknown): Record<string, unknown> {
   const input = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-  return Object.fromEntries(backgroundKeys.map((key) => [key, text(input[key], 2000)]));
+  return Object.fromEntries(
+    backgroundKeys.map((key) => [
+      key,
+      key === 'customMemos' ? sanitizeCustomMemos(input[key]) : text(input[key], 2000),
+    ]),
+  );
+}
+
+function sanitizeCustomMemos(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+      const input = entry as Record<string, unknown>;
+      const title = text(input.title, 80).trim();
+      const body = text(input.body, 4000);
+      if (!title && !body.trim()) return null;
+      return {
+        id: text(input.id, 80) || crypto.randomUUID(),
+        title: title || 'メモ',
+        body,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 20);
 }
 
 function sanitizeTags(value: unknown) {

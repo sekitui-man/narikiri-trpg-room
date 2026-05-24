@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react';
-import { Archive, Image as ImageIcon, Pencil, Save, Upload, X } from 'lucide-react';
+import { Archive, Image as ImageIcon, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import {
   cocSkillDefinitions,
   getSkillCategories,
@@ -100,6 +100,41 @@ export function CharacterEditor({
         },
       };
     });
+  }
+
+  function addCustomMemo() {
+    setCharacterDraft((current) => ({
+      ...current,
+      background: {
+        ...current.background,
+        customMemos: [
+          ...current.background.customMemos,
+          { id: crypto.randomUUID(), title: 'メモ', body: '' },
+        ],
+      },
+    }));
+  }
+
+  function updateCustomMemo(id: string, field: 'title' | 'body', value: string) {
+    setCharacterDraft((current) => ({
+      ...current,
+      background: {
+        ...current.background,
+        customMemos: current.background.customMemos.map((memo) =>
+          memo.id === id ? { ...memo, [field]: value } : memo,
+        ),
+      },
+    }));
+  }
+
+  function deleteCustomMemo(id: string) {
+    setCharacterDraft((current) => ({
+      ...current,
+      background: {
+        ...current.background,
+        customMemos: current.background.customMemos.filter((memo) => memo.id !== id),
+      },
+    }));
   }
 
   return (
@@ -310,7 +345,7 @@ export function CharacterEditor({
       </section>
 
       <section className="editor-section">
-        <h3>Background</h3>
+        <h3>Memo</h3>
         {backgroundFields.map((field) =>
           isEditing ? (
             <EditableTextarea
@@ -329,9 +364,33 @@ export function CharacterEditor({
           ),
         )}
         {isEditing ? (
-          <EditableTextarea label="メモ" value={characterDraft.memo} onChange={(value) => setCharacterDraft({ ...characterDraft, memo: value })} />
+          <>
+            <EditableTextarea label="メモ" value={characterDraft.memo} onChange={(value) => setCharacterDraft({ ...characterDraft, memo: value })} />
+            <div className="custom-memo-list">
+              {characterDraft.background.customMemos.map((memo) => (
+                <section className="custom-memo-card" key={memo.id}>
+                  <div className="custom-memo-header">
+                    <EditableTextField label="メモ欄名" value={memo.title} onChange={(value) => updateCustomMemo(memo.id, 'title', value)} />
+                    <button className="mini-icon-button danger" type="button" onClick={() => deleteCustomMemo(memo.id)} aria-label={`${memo.title}を削除`}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                  <EditableTextarea label="内容" value={memo.body} onChange={(value) => updateCustomMemo(memo.id, 'body', value)} />
+                </section>
+              ))}
+              <button className="button-secondary compact-button custom-memo-add" type="button" onClick={addCustomMemo}>
+                <Plus size={15} />
+                メモ欄を追加
+              </button>
+            </div>
+          </>
         ) : (
-          <ReadField label="メモ" value={characterDraft.memo} />
+          <>
+            <ReadField label="メモ" value={characterDraft.memo} />
+            {characterDraft.background.customMemos.map((memo) => (
+              <ReadField key={memo.id} label={memo.title} value={memo.body} />
+            ))}
+          </>
         )}
       </section>
 

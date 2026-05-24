@@ -5,7 +5,7 @@ import {
   normalizeSkillEntry,
   resolveSkillBase,
 } from './cocSkills';
-import type { Character, CoCBackground, CoCCharacteristics, CoCSkillMap } from './types';
+import type { Character, CharacterMemoEntry, CoCBackground, CoCCharacteristics, CoCSkillMap } from './types';
 
 export type CharacterLike = Omit<Partial<Character>, 'characteristics' | 'skills' | 'background'> & {
   id: string;
@@ -26,17 +26,8 @@ export const characteristicKeys: Array<keyof CoCCharacteristics> = [
   'edu',
 ];
 
-export const backgroundFields: Array<{ key: keyof CoCBackground; label: string }> = [
+export const backgroundFields: Array<{ key: 'description'; label: string }> = [
   { key: 'description', label: '外見・描写' },
-  { key: 'ideology', label: '思想・信条' },
-  { key: 'significantPeople', label: '重要な人物' },
-  { key: 'meaningfulLocations', label: '意味のある場所' },
-  { key: 'treasuredPossessions', label: '秘蔵品' },
-  { key: 'traits', label: '特徴' },
-  { key: 'injuries', label: '負傷・傷跡' },
-  { key: 'phobias', label: '恐怖症・マニア' },
-  { key: 'tomes', label: '魔導書・呪文' },
-  { key: 'encounters', label: '遭遇した神話存在' },
 ];
 
 const defaultCharacteristics: CoCCharacteristics = {
@@ -61,6 +52,7 @@ const defaultBackground: CoCBackground = {
   phobias: '',
   tomes: '',
   encounters: '',
+  customMemos: [],
 };
 
 export function normalizeCharacter(character: CharacterLike): Character {
@@ -102,7 +94,11 @@ export function normalizeCharacter(character: CharacterLike): Character {
     skills,
     weapons: character.weapons ?? '',
     possessions: character.possessions ?? '',
-    background: { ...defaultBackground, ...backgroundInput },
+    background: {
+      ...defaultBackground,
+      ...backgroundInput,
+      customMemos: normalizeCustomMemos((backgroundInput as { customMemos?: unknown }).customMemos),
+    },
     sanityCurrent: Number(character.sanityCurrent ?? sanityDefault),
     hitPointsCurrent: Number(character.hitPointsCurrent ?? hitPointDefault),
     magicPointsCurrent: Number(character.magicPointsCurrent ?? characteristics.pow),
@@ -167,4 +163,23 @@ function normalizeTags(tags: unknown) {
         .slice(0, 20),
     ),
   );
+}
+
+function normalizeCustomMemos(value: unknown): CharacterMemoEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+      const input = entry as Partial<Record<keyof CharacterMemoEntry, unknown>>;
+      const title = typeof input.title === 'string' ? input.title.trim() : '';
+      const body = typeof input.body === 'string' ? input.body : '';
+      if (!title && !body.trim()) return null;
+      return {
+        id: typeof input.id === 'string' && input.id ? input.id : crypto.randomUUID(),
+        title: title || 'メモ',
+        body,
+      };
+    })
+    .filter((entry): entry is CharacterMemoEntry => Boolean(entry))
+    .slice(0, 20);
 }

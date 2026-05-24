@@ -19,6 +19,12 @@ export type CoCSkillEntry = {
 
 export type CoCSkillMap = Record<string, CoCSkillEntry>;
 
+export type CharacterMemoEntry = {
+  id: string;
+  title: string;
+  body: string;
+};
+
 export type CoCBackground = {
   description: string;
   ideology: string;
@@ -30,6 +36,7 @@ export type CoCBackground = {
   phobias: string;
   tomes: string;
   encounters: string;
+  customMemos: CharacterMemoEntry[];
 };
 
 export type Character = {

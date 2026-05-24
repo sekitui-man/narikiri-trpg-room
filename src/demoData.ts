@@ -23,6 +23,7 @@ const demoBackground = {
   phobias: '',
   tomes: '',
   encounters: '',
+  customMemos: [],
 };
 
 export const demoCharacters: Character[] = [

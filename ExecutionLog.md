@@ -54,3 +54,4 @@
 - Added Discord link preview metadata, split the character list panel out of `App.tsx`, and added text-file import for I-A Character CoC 6th edition exports.
 - Added a blurred modal backdrop, a plus-button investigator creation chooser, I-A Character-aligned profile fields, and Supabase Storage-backed character image upload; verified `npm run build`.
 - Applied Supabase migration `add_character_image_storage` to project `narikiri-trpg-room`, confirmed the new character columns, `character-images` Storage bucket, and Storage object policies.
+- Removed non-I-A Character fixed background fields from the investigator editor, added custom memo sections, and mapped bracketed I-A Character memo blocks such as `[性格]` into those sections; verified `npm run build`.

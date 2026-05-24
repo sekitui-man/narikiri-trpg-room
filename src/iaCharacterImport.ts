@@ -29,7 +29,7 @@ export function parseIaCharacterText(text: string, ownerId: string | null): Char
   const characteristics = parseCharacteristics(normalizedText);
   const skillColumns = parseSkills(normalizedText, characteristics);
   const basicInfo = parseBasicInfo(normalizedText);
-  const memo = extractSection(normalizedText, 'メモ').trim();
+  const memoSection = parseMemoSection(normalizedText);
   const iconUrl = parseIconUrl(normalizedText);
   const currentSan = parseCurrentSan(normalizedText);
 
@@ -53,16 +53,16 @@ export function parseIaCharacterText(text: string, ownerId: string | null): Char
     imagePath: '',
     imageUrl: iconUrl,
     tags: basicInfo.occupation ? [basicInfo.occupation] : [],
-    memo,
+    memo: memoSection.memo,
     characteristics,
     skills: skillColumns,
     weapons: extractSection(normalizedText, '戦闘・武器・防具').trim(),
     possessions: extractSection(normalizedText, '所持品').trim(),
     background: {
       description: basicInfo.appearance,
-      traits: memo,
       tomes: extractBracketedSubsection(normalizedText, '魔導書、呪文、アーティファクト'),
       encounters: extractBracketedSubsection(normalizedText, '遭遇した超自然の存在'),
+      customMemos: memoSection.customMemos,
     },
     sanityCurrent: currentSan ?? undefined,
     hitPointsCurrent: parseStatusValue(normalizedText, 'HP') ?? undefined,
@@ -154,6 +154,23 @@ function parseSkills(text: string, characteristics: CoCCharacteristics) {
 function parseCurrentSan(text: string) {
   const match = text.match(/現在SAN値\s+(\d+)\s*\//);
   return match ? Number(match[1]) : null;
+}
+
+function parseMemoSection(text: string) {
+  const section = extractSection(text, 'メモ').trim();
+  if (!section) return { memo: '', customMemos: [] };
+
+  const firstCustomTitle = section.match(/^\[[^\]\n]+\]\s*$/m);
+  const memo = firstCustomTitle ? section.slice(0, firstCustomTitle.index).trim() : section;
+  const customMemos = Array.from(section.matchAll(/^\[([^\]\n]+)\]\s*\n([\s\S]*?)(?=^\[[^\]\n]+\]\s*$|$)/gm))
+    .map((match) => ({
+      id: crypto.randomUUID(),
+      title: match[1].trim(),
+      body: match[2].trim(),
+    }))
+    .filter((entry) => entry.title && entry.body);
+
+  return { memo, customMemos };
 }
 
 function parseStatusValue(text: string, label: string) {
