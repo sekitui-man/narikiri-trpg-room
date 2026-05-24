@@ -674,6 +674,20 @@ export function App() {
     setCurrentView('character-new');
   }
 
+  function handleCancelNewCharacter() {
+    const fallbackCharacter = characters.find((character) => !character.isArchived) ?? characters[0];
+    if (fallbackCharacter) {
+      setSelectedCharacterId(fallbackCharacter.id);
+      setCharacterDraft(fallbackCharacter);
+    }
+    setCurrentView('characters');
+    showToast('探索者の作成をキャンセルしました。');
+  }
+
+  function handleCancelCharacterEdit() {
+    showToast('編集内容を破棄しました。');
+  }
+
   async function handleImportCharacter(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -2140,6 +2154,7 @@ export function App() {
                 characterDraft={characterDraft}
                 currentUserId={currentUserId}
                 onArchive={handleArchiveCharacter}
+                onCancel={handleCancelCharacterEdit}
                 onImageUpload={handleCharacterImageUpload}
                 onSave={handleSaveCharacter}
                 setCharacterDraft={setCharacterDraft}
@@ -2174,6 +2189,7 @@ export function App() {
             characterDraft={characterDraft}
             currentUserId={currentUserId}
             onArchive={handleArchiveCharacter}
+            onCancel={handleCancelNewCharacter}
             onImageUpload={handleCharacterImageUpload}
             onSave={handleSaveCharacter}
             setCharacterDraft={setCharacterDraft}

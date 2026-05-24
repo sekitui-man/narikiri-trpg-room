@@ -23,6 +23,7 @@ type CharacterEditorProps = {
   characterDraft: Character;
   currentUserId: string | null;
   onArchive: () => void;
+  onCancel?: () => void;
   onImageUpload?: (file: File) => Promise<void>;
   onSave: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   setCharacterDraft: Dispatch<SetStateAction<Character>>;
@@ -37,6 +38,7 @@ export function CharacterEditor({
   characterDraft,
   currentUserId,
   onArchive,
+  onCancel,
   onImageUpload,
   onSave,
   setCharacterDraft,
@@ -63,6 +65,7 @@ export function CharacterEditor({
     if (editingSnapshot) setCharacterDraft(editingSnapshot);
     setEditingSnapshot(null);
     setIsEditing(!canArchiveCharacter);
+    onCancel?.();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
