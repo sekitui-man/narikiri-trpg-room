@@ -51,3 +51,4 @@
 - Split investigator sheet editing out of `App.tsx` into `components/CharacterEditor.tsx` and moved character normalization/default/derived-value logic into `characterModel.ts`; verified `npm run build`.
 - Changed existing investigator sheets to open in read-only mode with an explicit edit/cancel flow while keeping new investigator sheets editable by default; verified `npm run build` and local Browser interaction.
 - Reworked My Page into large menu cards for character management and profile editing, added profile display-name editing backed by `profiles.display_name`, and verified build plus Browser navigation.
+- Added Discord link preview metadata, split the character list panel out of `App.tsx`, and added text-file import for I-A Character CoC 6th edition exports.

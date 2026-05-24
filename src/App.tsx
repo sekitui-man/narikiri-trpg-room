@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   BookOpen,
@@ -40,8 +40,10 @@ import {
   updateSceneApi,
 } from './roomApi';
 import { AppTopbar } from './components/AppTopbar';
+import { CharacterListPanel } from './components/CharacterListPanel';
 import { CharacterEditor } from './components/CharacterEditor';
 import { demoCharacters, demoMessages, demoRooms, demoScenes } from './demoData';
+import { parseIaCharacterText } from './iaCharacterImport';
 import type { Character, Room, RpMessage, Scene } from './types';
 
 type RoomSettingsTab = 'basic' | 'permissions';
@@ -666,6 +668,23 @@ export function App() {
     setSelectedCharacterId('');
     setCharacterDraft(nextCharacter);
     setCurrentView('character-new');
+  }
+
+  async function handleImportCharacter(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const importedCharacter = parseIaCharacterText(text, currentUserId);
+      setSelectedCharacterId('');
+      setCharacterDraft(importedCharacter);
+      setCurrentView('character-new');
+      showToast('探索者データを読み込みました。保存すると登録されます。');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '探索者データを読み込めませんでした。', 'error');
+    }
   }
 
   async function handleSaveCharacter(event: FormEvent<HTMLFormElement>) {
@@ -2069,42 +2088,14 @@ export function App() {
           </div>
 
           <div className="character-manager">
-            <aside className="character-manager-list" aria-label="探索者一覧">
-              <div className="section-title">
-                <UsersRound size={16} />
-                探索者一覧
-              </div>
-              <label className="archive-filter-toggle">
-                <input
-                  type="checkbox"
-                  checked={showArchivedCharacters}
-                  onChange={(e) => setShowArchivedCharacters(e.target.checked)}
-                />
-                アーカイブ済みを表示
-              </label>
-              <div className="character-list">
-                {characters.filter((c) => showArchivedCharacters || !c.isArchived).length === 0 ? (
-                  <p className="empty-state">探索者はまだありません。右上のプラスマークから作成してください。</p>
-                ) : (
-                  characters
-                    .filter((c) => showArchivedCharacters || !c.isArchived)
-                    .map((character) => (
-                      <button
-                        className={`${character.id === selectedCharacterId ? 'character-item selected' : 'character-item'}${character.isArchived ? ' archived' : ''}`}
-                        key={character.id}
-                        type="button"
-                        onClick={() => setSelectedCharacterId(character.id)}
-                      >
-                        <span className="avatar" style={{ backgroundColor: character.color }} />
-                        <span>
-                          <strong>{character.name}</strong>
-                          <small>{character.isArchived ? 'アーカイブ済み' : (character.archetype || '探索者')}</small>
-                        </span>
-                      </button>
-                    ))
-                )}
-              </div>
-            </aside>
+            <CharacterListPanel
+              characters={characters}
+              selectedCharacterId={selectedCharacterId}
+              showArchivedCharacters={showArchivedCharacters}
+              onImport={handleImportCharacter}
+              onSelectCharacter={setSelectedCharacterId}
+              onToggleArchived={setShowArchivedCharacters}
+            />
             {characters.filter((c) => showArchivedCharacters || !c.isArchived).length > 0 ? (
               <CharacterEditor
                 activeDerived={activeDerived}

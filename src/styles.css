@@ -746,6 +746,30 @@ select:focus {
   letter-spacing: 0.02em;
 }
 
+.character-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.character-list-header .section-title {
+  margin-bottom: 0;
+}
+
+.file-import-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.file-import-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .scene-list,
 .archive-filter-toggle {
   display: flex;
