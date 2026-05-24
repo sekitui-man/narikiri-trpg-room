@@ -2380,11 +2380,6 @@ export function App() {
           <section className="memo-block">
             <h2>Scene Memo</h2>
             <p>{activeScene.summary}</p>
-            <ul>
-              <li>重要NPC: 店主</li>
-              <li>未解決: 黒い封蝋の手紙</li>
-              <li>次の焦点: 奥の扉</li>
-            </ul>
           </section>
         </aside>
       </div>
