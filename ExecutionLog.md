@@ -56,3 +56,4 @@
 - Applied Supabase migration `add_character_image_storage` to project `narikiri-trpg-room`, confirmed the new character columns, `character-images` Storage bucket, and Storage object policies.
 - Removed non-I-A Character fixed background fields from the investigator editor, added custom memo sections, and mapped bracketed I-A Character memo blocks such as `[性格]` into those sections; verified `npm run build`.
 - Fixed investigator editor cancel behavior so existing edits show discard feedback and new investigator creation returns to the investigator list; verified `npm run build`.
+- Replaced free-text investigator weapon and possession fields with column-based input grids, removed the visible appearance memo field, and restarted local preview on port 5174 after `npm run build`.

@@ -9,7 +9,6 @@ import {
   resolveSkillBase,
 } from '../cocSkills';
 import {
-  backgroundFields,
   characteristicKeys,
   clampSkillPoint,
   type DerivedCoCValues,
@@ -30,6 +29,8 @@ type CharacterEditorProps = {
 };
 
 const skillCategories = getSkillCategories();
+const weaponColumns = ['名前', '成功率', 'ダメージ', '射程', '攻撃回数', '装弾数', '耐久力', '故障その他'];
+const possessionColumns = ['名称', '単価', '個数', '価格', '効果・備考など'];
 
 export function CharacterEditor({
   activeDerived,
@@ -336,36 +337,29 @@ export function CharacterEditor({
         <h3>Equipment</h3>
         {isEditing ? (
           <>
-            <EditableTextarea label="武器" value={characterDraft.weapons} onChange={(value) => setCharacterDraft({ ...characterDraft, weapons: value })} />
-            <EditableTextarea label="所持品" value={characterDraft.possessions} onChange={(value) => setCharacterDraft({ ...characterDraft, possessions: value })} />
+            <EditableEquipmentTable
+              columns={weaponColumns}
+              label="武器"
+              value={characterDraft.weapons}
+              onChange={(value) => setCharacterDraft({ ...characterDraft, weapons: value })}
+            />
+            <EditableEquipmentTable
+              columns={possessionColumns}
+              label="所持品"
+              value={characterDraft.possessions}
+              onChange={(value) => setCharacterDraft({ ...characterDraft, possessions: value })}
+            />
           </>
         ) : (
           <>
-            <ReadField label="武器" value={characterDraft.weapons} />
-            <ReadField label="所持品" value={characterDraft.possessions} />
+            <ReadEquipmentTable columns={weaponColumns} label="武器" value={characterDraft.weapons} />
+            <ReadEquipmentTable columns={possessionColumns} label="所持品" value={characterDraft.possessions} />
           </>
         )}
       </section>
 
       <section className="editor-section">
         <h3>Memo</h3>
-        {backgroundFields.map((field) =>
-          isEditing ? (
-            <EditableTextarea
-              key={field.key}
-              label={field.label}
-              value={characterDraft.background[field.key]}
-              onChange={(value) =>
-                setCharacterDraft({
-                  ...characterDraft,
-                  background: { ...characterDraft.background, [field.key]: value },
-                })
-              }
-            />
-          ) : (
-            <ReadField key={field.key} label={field.label} value={characterDraft.background[field.key]} />
-          ),
-        )}
         {isEditing ? (
           <>
             <EditableTextarea label="メモ" value={characterDraft.memo} onChange={(value) => setCharacterDraft({ ...characterDraft, memo: value })} />
@@ -470,6 +464,122 @@ function EditableTextarea({ label, value, onChange }: { label: string; value: st
       <textarea value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
+}
+
+function EditableEquipmentTable({
+  columns,
+  label,
+  value,
+  onChange,
+}: {
+  columns: string[];
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const rows = parseEquipmentRows(value, columns);
+  const editableRows = rows.length ? rows : [createEmptyEquipmentRow(columns)];
+
+  function updateCell(rowIndex: number, columnIndex: number, nextValue: string) {
+    const nextRows = editableRows.map((row, currentRowIndex) =>
+      currentRowIndex === rowIndex
+        ? row.map((cell, currentColumnIndex) => (currentColumnIndex === columnIndex ? nextValue : cell))
+        : row,
+    );
+    onChange(serializeEquipmentRows(nextRows));
+  }
+
+  function addRow() {
+    onChange(serializeEquipmentRows([...editableRows, createEmptyEquipmentRow(columns)]));
+  }
+
+  function deleteRow(rowIndex: number) {
+    const nextRows = editableRows.filter((_, currentRowIndex) => currentRowIndex !== rowIndex);
+    onChange(serializeEquipmentRows(nextRows));
+  }
+
+  return (
+    <div className="equipment-editor">
+      <div className="equipment-editor-title">{label}</div>
+      <div className="equipment-grid editable" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(120px, 1fr)) 36px` }}>
+        {columns.map((column) => (
+          <strong key={column}>{column}</strong>
+        ))}
+        <span aria-hidden="true" />
+        {editableRows.map((row, rowIndex) => (
+          <div className="equipment-grid-row" role="row" key={`${label}-${rowIndex}`}>
+            {columns.map((column, columnIndex) => (
+              <input
+                aria-label={`${label} ${rowIndex + 1} ${column}`}
+                key={`${column}-${columnIndex}`}
+                value={row[columnIndex] ?? ''}
+                onChange={(event) => updateCell(rowIndex, columnIndex, event.target.value)}
+              />
+            ))}
+            <button className="mini-icon-button danger" type="button" onClick={() => deleteRow(rowIndex)} aria-label={`${label} ${rowIndex + 1}行目を削除`}>
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button className="button-secondary compact-button custom-memo-add" type="button" onClick={addRow}>
+        <Plus size={15} />
+        行を追加
+      </button>
+    </div>
+  );
+}
+
+function ReadEquipmentTable({ columns, label, value }: { columns: string[]; label: string; value: string }) {
+  const rows = parseEquipmentRows(value, columns);
+  if (!rows.length) return <ReadField label={label} value="" />;
+  return (
+    <div className="equipment-editor">
+      <div className="equipment-editor-title">{label}</div>
+      <div className="equipment-grid" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(120px, 1fr))` }}>
+        {columns.map((column) => (
+          <strong key={column}>{column}</strong>
+        ))}
+        {rows.map((row, rowIndex) => (
+          <div className="equipment-grid-row" role="row" key={`${label}-read-${rowIndex}`}>
+            {columns.map((column, columnIndex) => (
+              <span key={`${column}-${columnIndex}`}>{row[columnIndex] || '未設定'}</span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function parseEquipmentRows(value: string, columns: string[]) {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !isEquipmentHeaderLine(line, columns))
+    .map((line) => splitEquipmentLine(line, columns.length))
+    .filter((row) => row.some(Boolean));
+}
+
+function splitEquipmentLine(line: string, columnCount: number) {
+  const cells = line.includes('\t') ? line.split('\t') : line.split(/\s{2,}/);
+  return Array.from({ length: columnCount }, (_, index) => cells[index]?.trim() ?? '');
+}
+
+function serializeEquipmentRows(rows: string[][]) {
+  return rows
+    .map((row) => row.map((cell) => cell.trim()).join('\t'))
+    .filter((line) => line.replace(/\t/g, '').trim())
+    .join('\n');
+}
+
+function createEmptyEquipmentRow(columns: string[]) {
+  return columns.map(() => '');
+}
+
+function isEquipmentHeaderLine(line: string, columns: string[]) {
+  return columns.slice(0, 3).every((column) => line.includes(column));
 }
 
 function formatTags(tags: string[]) {

@@ -26,10 +26,6 @@ export const characteristicKeys: Array<keyof CoCCharacteristics> = [
   'edu',
 ];
 
-export const backgroundFields: Array<{ key: 'description'; label: string }> = [
-  { key: 'description', label: '外見・描写' },
-];
-
 const defaultCharacteristics: CoCCharacteristics = {
   str: 10,
   con: 10,

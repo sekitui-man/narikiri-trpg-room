@@ -1477,6 +1477,73 @@ select:focus {
   justify-self: start;
 }
 
+.equipment-editor {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.equipment-editor-title {
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.equipment-grid {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--surface);
+}
+
+.equipment-grid > strong,
+.equipment-grid-row > span,
+.equipment-grid-row > input {
+  min-width: 120px;
+  min-height: 44px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 10px;
+}
+
+.equipment-grid > strong {
+  color: var(--primary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+}
+
+.equipment-grid-row {
+  display: contents;
+}
+
+.equipment-grid-row > span {
+  color: var(--primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.equipment-grid-row > input {
+  width: 100%;
+  border-radius: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.equipment-grid-row > .mini-icon-button,
+.equipment-grid > span {
+  width: 36px;
+  height: 44px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
 .compact-button {
   min-height: 34px;
   padding: 6px 10px;

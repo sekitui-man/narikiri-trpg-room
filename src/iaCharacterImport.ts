@@ -59,7 +59,6 @@ export function parseIaCharacterText(text: string, ownerId: string | null): Char
     weapons: extractSection(normalizedText, '戦闘・武器・防具').trim(),
     possessions: extractSection(normalizedText, '所持品').trim(),
     background: {
-      description: basicInfo.appearance,
       tomes: extractBracketedSubsection(normalizedText, '魔導書、呪文、アーティファクト'),
       encounters: extractBracketedSubsection(normalizedText, '遭遇した超自然の存在'),
       customMemos: memoSection.customMemos,
@@ -82,15 +81,6 @@ function parseBasicInfo(text: string) {
   const hairColor = matchText(section, /^髪の色:\s*([^\n/]+)/m);
   const eyeColor = matchText(section, /瞳の色:\s*([^\n/]+)/);
   const skinColor = matchText(section, /肌の色:\s*([^\n/]+)/);
-  const appearance = [
-    height ? `身長: ${height}` : '',
-    weight ? `体重: ${weight}` : '',
-    hairColor ? `髪の色: ${hairColor}` : '',
-    eyeColor ? `瞳の色: ${eyeColor}` : '',
-    skinColor ? `肌の色: ${skinColor}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
 
   return {
     name,
@@ -103,7 +93,6 @@ function parseBasicInfo(text: string) {
     hairColor: hairColor.trim(),
     eyeColor: eyeColor.trim(),
     skinColor: skinColor.trim(),
-    appearance,
   };
 }
 
