@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { Dispatch, FormEvent, SetStateAction } from 'react';
-import { Archive, Pencil, Save, X } from 'lucide-react';
+import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react';
+import { Archive, Image as ImageIcon, Pencil, Save, Upload, X } from 'lucide-react';
 import {
   cocSkillDefinitions,
   getSkillCategories,
@@ -23,6 +23,7 @@ type CharacterEditorProps = {
   characterDraft: Character;
   currentUserId: string | null;
   onArchive: () => void;
+  onImageUpload?: (file: File) => Promise<void>;
   onSave: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   setCharacterDraft: Dispatch<SetStateAction<Character>>;
 };
@@ -36,11 +37,13 @@ export function CharacterEditor({
   characterDraft,
   currentUserId,
   onArchive,
+  onImageUpload,
   onSave,
   setCharacterDraft,
 }: CharacterEditorProps) {
   const [isEditing, setIsEditing] = useState(!canArchiveCharacter);
   const [editingSnapshot, setEditingSnapshot] = useState<Character | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const occupationBudget = characterDraft.characteristics.edu * 20;
   const interestBudget = characterDraft.characteristics.int * 10;
   const occupationUsed = Object.values(characterDraft.skills).reduce((sum, skill) => sum + skill.occupation, 0);
@@ -66,6 +69,18 @@ export function CharacterEditor({
     await onSave(event);
     setEditingSnapshot(null);
     setIsEditing(false);
+  }
+
+  async function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !onImageUpload) return;
+    setIsUploadingImage(true);
+    try {
+      await onImageUpload(file);
+    } finally {
+      setIsUploadingImage(false);
+    }
   }
 
   function updateSkill(name: string, field: keyof Omit<CoCSkillEntry, 'base'>, value: number) {
@@ -105,6 +120,27 @@ export function CharacterEditor({
         </div>
       </div>
 
+      <section className="character-portrait-row" aria-label="探索者画像">
+        <div className="character-portrait-frame">
+          {characterDraft.imageUrl ? (
+            <img src={characterDraft.imageUrl} alt={`${characterDraft.name}の画像`} />
+          ) : (
+            <ImageIcon size={28} />
+          )}
+        </div>
+        <div className="character-portrait-meta">
+          <span>Character Image</span>
+          <strong>{characterDraft.imagePath ? '保存済み' : characterDraft.imageUrl ? 'プレビュー' : '未設定'}</strong>
+          {isEditing && (
+            <label className="button-secondary compact-button image-upload-button">
+              <Upload size={15} />
+              {isUploadingImage ? 'アップロード中' : '画像を選択'}
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageChange} disabled={!onImageUpload || isUploadingImage} />
+            </label>
+          )}
+        </div>
+      </section>
+
       <div className="field-grid two">
         {isEditing ? (
           <>
@@ -123,9 +159,15 @@ export function CharacterEditor({
             />
             <EditableTextField label="年齢" value={characterDraft.age} onChange={(value) => setCharacterDraft({ ...characterDraft, age: value })} />
             <EditableTextField label="性別" value={characterDraft.gender} onChange={(value) => setCharacterDraft({ ...characterDraft, gender: value })} />
+            <EditableTextField label="身長" value={characterDraft.height} onChange={(value) => setCharacterDraft({ ...characterDraft, height: value })} />
+            <EditableTextField label="体重" value={characterDraft.weight} onChange={(value) => setCharacterDraft({ ...characterDraft, weight: value })} />
+            <EditableTextField label="髪の色" value={characterDraft.hairColor} onChange={(value) => setCharacterDraft({ ...characterDraft, hairColor: value })} />
+            <EditableTextField label="瞳の色" value={characterDraft.eyeColor} onChange={(value) => setCharacterDraft({ ...characterDraft, eyeColor: value })} />
+            <EditableTextField label="肌の色" value={characterDraft.skinColor} onChange={(value) => setCharacterDraft({ ...characterDraft, skinColor: value })} />
             <EditableTextField label="色" value={characterDraft.color} onChange={(value) => setCharacterDraft({ ...characterDraft, color: value })} />
             <EditableTextField label="住所" value={characterDraft.residence} onChange={(value) => setCharacterDraft({ ...characterDraft, residence: value })} />
             <EditableTextField label="出身" value={characterDraft.birthplace} onChange={(value) => setCharacterDraft({ ...characterDraft, birthplace: value })} />
+            <EditableTextField label="タグ" value={formatTags(characterDraft.tags)} onChange={(value) => setCharacterDraft({ ...characterDraft, tags: parseTags(value) })} />
           </>
         ) : (
           <>
@@ -134,9 +176,15 @@ export function CharacterEditor({
             <ReadField label="職業" value={characterDraft.occupation} />
             <ReadField label="年齢" value={characterDraft.age} />
             <ReadField label="性別" value={characterDraft.gender} />
+            <ReadField label="身長" value={characterDraft.height} />
+            <ReadField label="体重" value={characterDraft.weight} />
+            <ReadField label="髪の色" value={characterDraft.hairColor} />
+            <ReadField label="瞳の色" value={characterDraft.eyeColor} />
+            <ReadField label="肌の色" value={characterDraft.skinColor} />
             <ReadField label="色" value={characterDraft.color} />
             <ReadField label="住所" value={characterDraft.residence} />
             <ReadField label="出身" value={characterDraft.birthplace} />
+            <ReadField label="タグ" value={formatTags(characterDraft.tags)} />
           </>
         )}
       </div>
@@ -360,4 +408,12 @@ function EditableTextarea({ label, value, onChange }: { label: string; value: st
       <textarea value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
+}
+
+function formatTags(tags: string[]) {
+  return tags.join('、');
+}
+
+function parseTags(value: string) {
+  return [...new Set(value.split(/[,\n、]/).map((tag) => tag.trim()).filter(Boolean).slice(0, 20))];
 }

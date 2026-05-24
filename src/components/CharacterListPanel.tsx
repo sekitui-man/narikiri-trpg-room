@@ -1,12 +1,10 @@
-import type { ChangeEvent } from 'react';
-import { Upload, UsersRound } from 'lucide-react';
+import { UsersRound } from 'lucide-react';
 import type { Character } from '../types';
 
 type CharacterListPanelProps = {
   characters: Character[];
   selectedCharacterId: string;
   showArchivedCharacters: boolean;
-  onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   onSelectCharacter: (characterId: string) => void;
   onToggleArchived: (showArchived: boolean) => void;
 };
@@ -15,7 +13,6 @@ export function CharacterListPanel({
   characters,
   selectedCharacterId,
   showArchivedCharacters,
-  onImport,
   onSelectCharacter,
   onToggleArchived,
 }: CharacterListPanelProps) {
@@ -28,10 +25,6 @@ export function CharacterListPanel({
           <UsersRound size={16} />
           探索者一覧
         </div>
-        <label className="mini-icon-button file-import-button" aria-label="探索者データをインポート">
-          <Upload size={15} />
-          <input type="file" accept=".txt,text/plain" onChange={onImport} />
-        </label>
       </div>
       <label className="archive-filter-toggle">
         <input
@@ -43,7 +36,7 @@ export function CharacterListPanel({
       </label>
       <div className="character-list">
         {visibleCharacters.length === 0 ? (
-          <p className="empty-state">探索者はまだありません。右上のプラスマーク、またはインポートから作成してください。</p>
+          <p className="empty-state">探索者はまだありません。右上のプラスマークから作成してください。</p>
         ) : (
           visibleCharacters.map((character) => (
             <button

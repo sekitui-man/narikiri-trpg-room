@@ -27,7 +27,10 @@ type BackgroundKey =
   | 'encounters';
 
 const characterColumns =
+  'id, name, player_name, archetype, color, memo, owner_id, occupation, age, gender, height, weight, hair_color, eye_color, skin_color, residence, birthplace, image_path, tags, characteristics, skills, weapons, possessions, background, sanity_current, hit_points_current, magic_points_current, is_archived';
+const legacyCharacterColumns =
   'id, name, player_name, archetype, color, memo, owner_id, occupation, age, gender, residence, birthplace, characteristics, skills, weapons, possessions, background, sanity_current, hit_points_current, magic_points_current, is_archived';
+const characterExtendedColumns = new Set(['height', 'weight', 'hair_color', 'eye_color', 'skin_color', 'image_path', 'tags']);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const colorPattern = /^#[0-9a-fA-F]{6}$/;
 const characteristicKeys: CharacteristicKey[] = ['str', 'con', 'siz', 'int', 'pow', 'dex', 'app', 'edu'];
@@ -58,11 +61,21 @@ export async function listCharacters(context: PagesContext) {
   const url = new URL(context.request.url);
   const roomId = requireUuid(url.searchParams.get('roomId'), 'roomId');
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('characters')
     .select(characterColumns)
     .eq('room_id', roomId)
     .order('created_at', { ascending: true });
+
+  if (isUndefinedColumnError(error)) {
+    const fallback = await supabase
+      .from('characters')
+      .select(legacyCharacterColumns)
+      .eq('room_id', roomId)
+      .order('created_at', { ascending: true });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw new ApiError(400, error.message);
   return json({ characters: data ?? [] });
@@ -74,7 +87,7 @@ export async function createCharacter(context: PagesContext) {
   const roomId = requireUuid(body.roomId, 'roomId');
   const payload = sanitizeCharacterPayload(body.character ?? body);
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('characters')
     .insert({
       ...payload,
@@ -84,6 +97,21 @@ export async function createCharacter(context: PagesContext) {
     })
     .select(characterColumns)
     .single();
+
+  if (isUndefinedColumnError(error)) {
+    const fallback = await supabase
+      .from('characters')
+      .insert({
+        ...withoutExtendedCharacterColumns(payload),
+        room_id: roomId,
+        owner_id: userId,
+        is_archived: false,
+      })
+      .select(legacyCharacterColumns)
+      .single();
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw new ApiError(400, error.message);
   return json({ character: data }, 201);
@@ -96,13 +124,25 @@ export async function updateCharacter(context: PagesContext) {
   const roomId = requireUuid(body.roomId, 'roomId');
   const payload = sanitizeCharacterPayload(body.character ?? body);
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('characters')
     .update(payload)
     .eq('id', id)
     .eq('room_id', roomId)
     .select(characterColumns)
     .single();
+
+  if (isUndefinedColumnError(error)) {
+    const fallback = await supabase
+      .from('characters')
+      .update(withoutExtendedCharacterColumns(payload))
+      .eq('id', id)
+      .eq('room_id', roomId)
+      .select(legacyCharacterColumns)
+      .single();
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw new ApiError(400, error.message);
   return json({ character: data });
@@ -146,8 +186,15 @@ function sanitizeCharacterPayload(value: unknown) {
     occupation,
     age: text(input.age, 40),
     gender: text(input.gender, 40),
+    height: text(input.height, 40),
+    weight: text(input.weight, 40),
+    hair_color: text(input.hairColor ?? input.hair_color, 80),
+    eye_color: text(input.eyeColor ?? input.eye_color, 80),
+    skin_color: text(input.skinColor ?? input.skin_color, 80),
     residence: text(input.residence, 120),
     birthplace: text(input.birthplace, 120),
+    image_path: text(input.imagePath ?? input.image_path, 500),
+    tags: sanitizeTags(input.tags),
     characteristics,
     skills: sanitizeSkills(input.skills),
     weapons: text(input.weapons, 2000),
@@ -157,6 +204,16 @@ function sanitizeCharacterPayload(value: unknown) {
     hit_points_current: int(input.hitPointsCurrent ?? input.hit_points_current, 0, 999, Math.ceil((characteristics.con + characteristics.siz) / 2)),
     magic_points_current: int(input.magicPointsCurrent ?? input.magic_points_current, 0, 999, characteristics.pow),
   };
+}
+
+function withoutExtendedCharacterColumns(payload: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(payload).filter(([key]) => !characterExtendedColumns.has(key)));
+}
+
+function isUndefinedColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const next = error as { code?: string; message?: string };
+  return next.code === '42703' || Boolean(next.message?.includes('column') && next.message.includes('does not exist'));
 }
 
 async function createAuthenticatedSupabase(context: PagesContext) {
@@ -228,6 +285,14 @@ function sanitizeSkills(value: unknown) {
 function sanitizeBackground(value: unknown) {
   const input = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
   return Object.fromEntries(backgroundKeys.map((key) => [key, text(input[key], 2000)]));
+}
+
+function sanitizeTags(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((tag) => text(tag, 40).trim())
+    .filter(Boolean)
+    .slice(0, 20);
 }
 
 function requiredText(value: unknown, maxLength: number, fieldName: string) {

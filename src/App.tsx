@@ -40,8 +40,10 @@ import {
   updateSceneApi,
 } from './roomApi';
 import { AppTopbar } from './components/AppTopbar';
+import { CharacterCreateModal } from './components/CharacterCreateModal';
 import { CharacterListPanel } from './components/CharacterListPanel';
 import { CharacterEditor } from './components/CharacterEditor';
+import { getCharacterImagePublicUrl, uploadCharacterImage, uploadCharacterImageFromUrl } from './characterImageStorage';
 import { demoCharacters, demoMessages, demoRooms, demoScenes } from './demoData';
 import { parseIaCharacterText } from './iaCharacterImport';
 import type { Character, Room, RpMessage, Scene } from './types';
@@ -163,6 +165,7 @@ export function App() {
   const [adminDetailDraft, setAdminDetailDraft] = useState<{ role: AccessRole; isActive: boolean } | null>(null);
   const [profileDraft, setProfileDraft] = useState({ displayName: '' });
   const [showArchivedCharacters, setShowArchivedCharacters] = useState(false);
+  const [isCharacterCreateMenuOpen, setIsCharacterCreateMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -667,6 +670,7 @@ export function App() {
     const nextCharacter = createDefaultCharacter(currentUserId);
     setSelectedCharacterId('');
     setCharacterDraft(nextCharacter);
+    setIsCharacterCreateMenuOpen(false);
     setCurrentView('character-new');
   }
 
@@ -678,12 +682,45 @@ export function App() {
     try {
       const text = await file.text();
       const importedCharacter = parseIaCharacterText(text, currentUserId);
+      let importedImage = false;
+      if (supabase && currentUserId && importedCharacter.imageUrl) {
+        try {
+          const uploaded = await uploadCharacterImageFromUrl(importedCharacter.imageUrl, currentUserId);
+          importedCharacter.imagePath = uploaded.path;
+          importedCharacter.imageUrl = uploaded.url;
+          importedImage = true;
+        } catch {
+          importedImage = false;
+        }
+      }
       setSelectedCharacterId('');
       setCharacterDraft(importedCharacter);
+      setIsCharacterCreateMenuOpen(false);
       setCurrentView('character-new');
-      showToast('探索者データを読み込みました。保存すると登録されます。');
+      showToast(importedCharacter.imageUrl && !importedImage && supabase ? '探索者データを読み込みました。画像は取得できませんでした。' : '探索者データを読み込みました。保存すると登録されます。');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '探索者データを読み込めませんでした。', 'error');
+    }
+  }
+
+  async function handleCharacterImageUpload(file: File) {
+    if (!currentUserId) {
+      const previewUrl = URL.createObjectURL(file);
+      setCharacterDraft((current) => ({ ...current, imageUrl: previewUrl }));
+      showToast('デモ表示用に画像を読み込みました。');
+      return;
+    }
+    try {
+      const uploaded = await uploadCharacterImage(file, currentUserId, characterDraft.imagePath);
+      setCharacterDraft((current) => ({
+        ...current,
+        imagePath: uploaded.path,
+        imageUrl: uploaded.url,
+      }));
+      showToast('キャラクター画像をアップロードしました。');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'キャラクター画像をアップロードできませんでした。', 'error');
+      throw error;
     }
   }
 
@@ -2081,7 +2118,7 @@ export function App() {
                 <UserRound size={16} />
                 マイページ
               </button>
-              <button className="icon-button" type="button" onClick={handleStartNewCharacter} aria-label="新規探索者">
+              <button className="icon-button" type="button" onClick={() => setIsCharacterCreateMenuOpen(true)} aria-label="新規探索者">
                 <Plus size={18} />
               </button>
             </div>
@@ -2092,7 +2129,6 @@ export function App() {
               characters={characters}
               selectedCharacterId={selectedCharacterId}
               showArchivedCharacters={showArchivedCharacters}
-              onImport={handleImportCharacter}
               onSelectCharacter={setSelectedCharacterId}
               onToggleArchived={setShowArchivedCharacters}
             />
@@ -2104,6 +2140,7 @@ export function App() {
                 characterDraft={characterDraft}
                 currentUserId={currentUserId}
                 onArchive={handleArchiveCharacter}
+                onImageUpload={handleCharacterImageUpload}
                 onSave={handleSaveCharacter}
                 setCharacterDraft={setCharacterDraft}
               />
@@ -2137,6 +2174,7 @@ export function App() {
             characterDraft={characterDraft}
             currentUserId={currentUserId}
             onArchive={handleArchiveCharacter}
+            onImageUpload={handleCharacterImageUpload}
             onSave={handleSaveCharacter}
             setCharacterDraft={setCharacterDraft}
           />
@@ -2326,6 +2364,13 @@ export function App() {
         </aside>
       </div>
       )}
+      {isCharacterCreateMenuOpen && (
+        <CharacterCreateModal
+          onClose={() => setIsCharacterCreateMenuOpen(false)}
+          onCreateBlank={handleStartNewCharacter}
+          onImport={handleImportCharacter}
+        />
+      )}
       {toast && (
         <div className={`toast toast-${toast.type}`} role="status" aria-live="polite">
           {toast.message}
@@ -2512,8 +2557,16 @@ function rowToCharacter(character: CharacterRow): Character {
     occupation: character.occupation ?? '',
     age: character.age ?? '',
     gender: character.gender ?? '',
+    height: character.height ?? '',
+    weight: character.weight ?? '',
+    hairColor: character.hair_color ?? '',
+    eyeColor: character.eye_color ?? '',
+    skinColor: character.skin_color ?? '',
     residence: character.residence ?? '',
     birthplace: character.birthplace ?? '',
+    imagePath: character.image_path ?? '',
+    imageUrl: getCharacterImagePublicUrl(character.image_path ?? ''),
+    tags: normalizeTags(character.tags),
     characteristics: character.characteristics,
     skills: character.skills,
     weapons: character.weapons ?? '',

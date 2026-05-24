@@ -12,8 +12,15 @@ export type CharacterRow = {
   occupation: string | null;
   age: string | null;
   gender: string | null;
+  height: string | null;
+  weight: string | null;
+  hair_color: string | null;
+  eye_color: string | null;
+  skin_color: string | null;
   residence: string | null;
   birthplace: string | null;
+  image_path: string | null;
+  tags: unknown;
   characteristics: unknown;
   skills: unknown;
   weapons: string | null;

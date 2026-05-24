@@ -73,8 +73,15 @@ create table if not exists public.characters (
   occupation text not null default '',
   age text not null default '',
   gender text not null default '',
+  height text not null default '',
+  weight text not null default '',
+  hair_color text not null default '',
+  eye_color text not null default '',
+  skin_color text not null default '',
   residence text not null default '',
   birthplace text not null default '',
+  image_path text not null default '',
+  tags text[] not null default '{}',
   characteristics jsonb not null default '{"str":10,"con":10,"siz":10,"int":10,"pow":10,"dex":10,"app":10,"edu":10}'::jsonb,
   skills jsonb not null default '{}'::jsonb,
   weapons text not null default '',
@@ -91,8 +98,15 @@ alter table public.characters add column if not exists player_name text not null
 alter table public.characters add column if not exists occupation text not null default '';
 alter table public.characters add column if not exists age text not null default '';
 alter table public.characters add column if not exists gender text not null default '';
+alter table public.characters add column if not exists height text not null default '';
+alter table public.characters add column if not exists weight text not null default '';
+alter table public.characters add column if not exists hair_color text not null default '';
+alter table public.characters add column if not exists eye_color text not null default '';
+alter table public.characters add column if not exists skin_color text not null default '';
 alter table public.characters add column if not exists residence text not null default '';
 alter table public.characters add column if not exists birthplace text not null default '';
+alter table public.characters add column if not exists image_path text not null default '';
+alter table public.characters add column if not exists tags text[] not null default '{}';
 alter table public.characters add column if not exists characteristics jsonb not null default '{"str":10,"con":10,"siz":10,"int":10,"pow":10,"dex":10,"app":10,"edu":10}'::jsonb;
 alter table public.characters add column if not exists skills jsonb not null default '{}'::jsonb;
 alter table public.characters add column if not exists weapons text not null default '';
@@ -102,6 +116,19 @@ alter table public.characters add column if not exists sanity_current integer no
 alter table public.characters add column if not exists hit_points_current integer not null default 10;
 alter table public.characters add column if not exists magic_points_current integer not null default 10;
 alter table public.characters add column if not exists is_archived boolean not null default false;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'character-images',
+  'character-images',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 create table if not exists public.scenes (
   id uuid primary key default gen_random_uuid(),
@@ -606,6 +633,40 @@ using (
         and member.role in ('owner', 'gm')
     )
   )
+);
+
+drop policy if exists "Users can upload own character images" on storage.objects;
+create policy "Users can upload own character images"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'character-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "Users can update own character images" on storage.objects;
+create policy "Users can update own character images"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'character-images'
+  and owner_id = auth.uid()::text
+)
+with check (
+  bucket_id = 'character-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "Users can delete own character images" on storage.objects;
+create policy "Users can delete own character images"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'character-images'
+  and owner_id = auth.uid()::text
 );
 
 create policy "Room members can read scenes"

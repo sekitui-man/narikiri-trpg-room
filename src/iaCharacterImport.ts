@@ -43,15 +43,23 @@ export function parseIaCharacterText(text: string, ownerId: string | null): Char
     occupation: basicInfo.occupation,
     age: basicInfo.age,
     gender: basicInfo.gender,
+    height: basicInfo.height,
+    weight: basicInfo.weight,
+    hairColor: basicInfo.hairColor,
+    eyeColor: basicInfo.eyeColor,
+    skinColor: basicInfo.skinColor,
     birthplace: basicInfo.birthplace,
     residence: '',
+    imagePath: '',
+    imageUrl: iconUrl,
+    tags: basicInfo.occupation ? [basicInfo.occupation] : [],
     memo,
     characteristics,
     skills: skillColumns,
     weapons: extractSection(normalizedText, '戦闘・武器・防具').trim(),
     possessions: extractSection(normalizedText, '所持品').trim(),
     background: {
-      description: [basicInfo.appearance, iconUrl ? `アイコン: ${iconUrl}` : ''].filter(Boolean).join('\n'),
+      description: basicInfo.appearance,
       traits: memo,
       tomes: extractBracketedSubsection(normalizedText, '魔導書、呪文、アーティファクト'),
       encounters: extractBracketedSubsection(normalizedText, '遭遇した超自然の存在'),
@@ -69,12 +77,17 @@ function parseBasicInfo(text: string) {
   const ageGenderLine = matchText(section, /^年齢:\s*(.+)$/m);
   const ageMatch = ageGenderLine.match(/^(.+?)\s*\/\s*性別:\s*(.+?)(?:\s*\/|$)/);
   const birthplace = matchText(section, /出身:\s*([^\n]+)/);
+  const height = matchText(section, /身長:\s*([^\n/]+)/);
+  const weight = matchText(section, /^体重:\s*([^\n/]+)/m);
+  const hairColor = matchText(section, /^髪の色:\s*([^\n/]+)/m);
+  const eyeColor = matchText(section, /瞳の色:\s*([^\n/]+)/);
+  const skinColor = matchText(section, /肌の色:\s*([^\n/]+)/);
   const appearance = [
-    matchText(section, /身長:\s*([^\n/]+)/) ? `身長: ${matchText(section, /身長:\s*([^\n/]+)/)}` : '',
-    matchText(section, /^体重:\s*([^\n/]+)/m) ? `体重: ${matchText(section, /^体重:\s*([^\n/]+)/m)}` : '',
-    matchText(section, /^髪の色:\s*([^\n/]+)/m) ? `髪の色: ${matchText(section, /^髪の色:\s*([^\n/]+)/m)}` : '',
-    matchText(section, /瞳の色:\s*([^\n/]+)/) ? `瞳の色: ${matchText(section, /瞳の色:\s*([^\n/]+)/)}` : '',
-    matchText(section, /肌の色:\s*([^\n/]+)/) ? `肌の色: ${matchText(section, /肌の色:\s*([^\n/]+)/)}` : '',
+    height ? `身長: ${height}` : '',
+    weight ? `体重: ${weight}` : '',
+    hairColor ? `髪の色: ${hairColor}` : '',
+    eyeColor ? `瞳の色: ${eyeColor}` : '',
+    skinColor ? `肌の色: ${skinColor}` : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -85,6 +98,11 @@ function parseBasicInfo(text: string) {
     age: ageMatch?.[1]?.trim() ?? '',
     gender: ageMatch?.[2]?.trim() ?? '',
     birthplace: birthplace.trim(),
+    height: height.trim(),
+    weight: weight.trim(),
+    hairColor: hairColor.trim(),
+    eyeColor: eyeColor.trim(),
+    skinColor: skinColor.trim(),
     appearance,
   };
 }

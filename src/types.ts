@@ -43,8 +43,16 @@ export type Character = {
   occupation: string;
   age: string;
   gender: string;
+  height: string;
+  weight: string;
+  hairColor: string;
+  eyeColor: string;
+  skinColor: string;
   residence: string;
   birthplace: string;
+  imagePath: string;
+  imageUrl: string;
+  tags: string[];
   characteristics: CoCCharacteristics;
   skills: CoCSkillMap;
   weapons: string;

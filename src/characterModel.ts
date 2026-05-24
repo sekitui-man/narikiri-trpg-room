@@ -88,8 +88,16 @@ export function normalizeCharacter(character: CharacterLike): Character {
     occupation: character.occupation ?? character.archetype ?? '',
     age: character.age ?? '',
     gender: character.gender ?? '',
+    height: character.height ?? '',
+    weight: character.weight ?? '',
+    hairColor: character.hairColor ?? '',
+    eyeColor: character.eyeColor ?? '',
+    skinColor: character.skinColor ?? '',
     residence: character.residence ?? '',
     birthplace: character.birthplace ?? '',
+    imagePath: character.imagePath ?? '',
+    imageUrl: character.imageUrl ?? '',
+    tags: normalizeTags(character.tags),
     characteristics,
     skills,
     weapons: character.weapons ?? '',
@@ -147,4 +155,16 @@ export function normalizeSkills(skills: unknown, characteristics: CoCCharacteris
 export function clampSkillPoint(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.min(999, Math.max(0, Math.trunc(value)));
+}
+
+function normalizeTags(tags: unknown) {
+  if (!Array.isArray(tags)) return [];
+  return Array.from(
+    new Set(
+      tags
+        .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
+        .filter(Boolean)
+        .slice(0, 20),
+    ),
+  );
 }
