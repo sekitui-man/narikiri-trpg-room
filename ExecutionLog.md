@@ -53,3 +53,4 @@
 - Reworked My Page into large menu cards for character management and profile editing, added profile display-name editing backed by `profiles.display_name`, and verified build plus Browser navigation.
 - Added Discord link preview metadata, split the character list panel out of `App.tsx`, and added text-file import for I-A Character CoC 6th edition exports.
 - Added a blurred modal backdrop, a plus-button investigator creation chooser, I-A Character-aligned profile fields, and Supabase Storage-backed character image upload; verified `npm run build`.
+- Applied Supabase migration `add_character_image_storage` to project `narikiri-trpg-room`, confirmed the new character columns, `character-images` Storage bucket, and Storage object policies.
