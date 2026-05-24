@@ -2286,53 +2286,62 @@ export function App() {
           <div className="timeline">
             {groupedMessages.map((message) => (
               <article className={message.mode === 'ooc' ? 'message ooc' : 'message'} key={message.id}>
-                <div className="message-meta">
-                  <span>{message.author}</span>
-                  <div className="message-meta-actions">
-                    <small>{message.mode.toUpperCase()} / {message.createdAt}</small>
-                    {canManageMessage(message) && (
-                      <span className="message-actions">
-                        <button
-                          className="mini-icon-button"
-                          type="button"
-                          onClick={() => startEditMessage(message)}
-                          aria-label="発言を編集"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className="mini-icon-button"
-                          type="button"
-                          onClick={() => deleteMessage(message)}
-                          aria-label="発言を削除"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </span>
-                    )}
-                  </div>
+                <div className="message-avatar" style={{ borderColor: message.character?.color ?? '#090909' }}>
+                  {message.mode === 'ic' && message.character?.imageUrl ? (
+                    <img src={message.character.imageUrl} alt="" />
+                  ) : (
+                    <span>{message.author.slice(0, 1)}</span>
+                  )}
                 </div>
-                {editingMessageId === message.id ? (
-                  <div className="message-editor">
-                    <textarea
-                      value={editingMessageDraft}
-                      onChange={(event) => setEditingMessageDraft(event.target.value)}
-                      rows={3}
-                    />
-                    <div className="editor-actions compact">
-                      <button className="button-primary" type="button" onClick={() => saveEditedMessage(message)}>
-                        <Check size={16} />
-                        保存
-                      </button>
-                      <button className="button-secondary" type="button" onClick={cancelEditMessage}>
-                        <X size={16} />
-                        取消
-                      </button>
+                <div className="message-bubble">
+                  <div className="message-meta">
+                    <span>{message.author}</span>
+                    <div className="message-meta-actions">
+                      <small>{message.mode.toUpperCase()} / {message.createdAt}</small>
+                      {canManageMessage(message) && (
+                        <span className="message-actions">
+                          <button
+                            className="mini-icon-button"
+                            type="button"
+                            onClick={() => startEditMessage(message)}
+                            aria-label="発言を編集"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            className="mini-icon-button"
+                            type="button"
+                            onClick={() => deleteMessage(message)}
+                            aria-label="発言を削除"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </span>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <p>{message.body}</p>
-                )}
+                  {editingMessageId === message.id ? (
+                    <div className="message-editor">
+                      <textarea
+                        value={editingMessageDraft}
+                        onChange={(event) => setEditingMessageDraft(event.target.value)}
+                        rows={3}
+                      />
+                      <div className="editor-actions compact">
+                        <button className="button-primary" type="button" onClick={() => saveEditedMessage(message)}>
+                          <Check size={16} />
+                          保存
+                        </button>
+                        <button className="button-secondary" type="button" onClick={cancelEditMessage}>
+                          <X size={16} />
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p>{message.body}</p>
+                  )}
+                </div>
               </article>
             ))}
           </div>

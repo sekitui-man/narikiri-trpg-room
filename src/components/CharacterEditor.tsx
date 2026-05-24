@@ -337,7 +337,7 @@ export function CharacterEditor({
         <h3>Equipment</h3>
         {isEditing ? (
           <>
-            <EquipmentAccordion defaultOpen={Boolean(characterDraft.weapons.trim())} label="武器">
+            <EquipmentAccordion label="武器">
               <EditableEquipmentTable
                 columns={weaponColumns}
                 label="武器"
@@ -345,7 +345,7 @@ export function CharacterEditor({
                 onChange={(value) => setCharacterDraft({ ...characterDraft, weapons: value })}
               />
             </EquipmentAccordion>
-            <EquipmentAccordion defaultOpen={Boolean(characterDraft.possessions.trim())} label="所持品">
+            <EquipmentAccordion label="所持品">
               <EditableEquipmentTable
                 columns={possessionColumns}
                 label="所持品"
@@ -356,10 +356,10 @@ export function CharacterEditor({
           </>
         ) : (
           <>
-            <EquipmentAccordion defaultOpen={Boolean(characterDraft.weapons.trim())} label="武器">
+            <EquipmentAccordion label="武器">
               <ReadEquipmentTable columns={weaponColumns} label="武器" value={characterDraft.weapons} />
             </EquipmentAccordion>
-            <EquipmentAccordion defaultOpen={Boolean(characterDraft.possessions.trim())} label="所持品">
+            <EquipmentAccordion label="所持品">
               <ReadEquipmentTable columns={possessionColumns} label="所持品" value={characterDraft.possessions} />
             </EquipmentAccordion>
           </>
@@ -476,14 +476,12 @@ function EditableTextarea({ label, value, onChange }: { label: string; value: st
 
 function EquipmentAccordion({
   children,
-  defaultOpen,
   label,
 }: {
   children: ReactNode;
-  defaultOpen: boolean;
   label: string;
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <section className="equipment-accordion">
